@@ -56,7 +56,7 @@ def health_gemini():
     try:
         client = genai.Client()
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents="Say 'Gemini is connected' in exactly 4 words.",
         )
         return jsonify({
@@ -190,7 +190,7 @@ def _generate_summary(events_result: dict, conflicts_result: dict | None, prompt
 Respond in natural, spoken language. No JSON. No bullet points unless explicitly asked. Keep it under 30 seconds of speaking time (~75 words)."""
 
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents=full_prompt,
         )
         return response.text

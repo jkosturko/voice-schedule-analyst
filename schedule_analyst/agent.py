@@ -17,7 +17,7 @@ from .calendar_tools import get_calendar_events, find_conflicts, suggest_optimiz
 # Model selection: native audio for Live API voice, text model for web/CLI
 # ADK web and adk run use generateContent which requires a text-capable model.
 # The live_agent.py pipeline uses the native audio model directly.
-AGENT_MODEL = os.environ.get("SCHEDULE_ANALYST_MODEL", "gemini-2.0-flash")
+AGENT_MODEL = os.environ.get("SCHEDULE_ANALYST_MODEL", "gemini-2.5-flash")
 
 # Load brain rules for dynamic system instruction
 BRAIN_PATH = os.path.join(os.path.dirname(__file__), "..", "brain", "schedule-analysis-rules.md")
@@ -53,7 +53,7 @@ You help users understand and optimize their schedules by analyzing their Google
 
 root_agent = Agent(
     name="schedule_analyst",
-    model=AGENT_MODEL,  # Default: gemini-2.0-flash (text); override via SCHEDULE_ANALYST_MODEL env var
+    model=AGENT_MODEL,  # Default: gemini-2.5-flash (text); override via SCHEDULE_ANALYST_MODEL env var
     description="Voice-first calendar analyst that speaks schedule insights, conflicts, and optimization suggestions",
     instruction=SYSTEM_INSTRUCTION,
     tools=[get_calendar_events, find_conflicts, suggest_optimizations],
