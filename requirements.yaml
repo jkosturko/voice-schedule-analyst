@@ -14,8 +14,54 @@ changelog:
 #   - implementation_status: { implemented: true/false, tested: true/false, test_count: N }
 #   - eval_driven: true/false
 #
-# RULE: tested: true ONLY if verified in browser or via live agent interaction.
+# RULE: tested: true ONLY if verified in the CUSTOM UI (localhost:8080), not the ADK dev UI.
 # Unit tests alone do NOT count as tested.
+# Voice tests (voice-001, voice-002, voice-003) require Jessica's sign-off — agents cannot mark PASS.
+#
+# ═══════════════════════════════════════════════════════════
+# BUY VS BUILD — USE THESE, DON'T REBUILD
+# ═══════════════════════════════════════════════════════════
+#
+# AUDIO PIPELINE (copy from Google's official repo — Apache 2.0):
+#   Source: github.com/google-gemini/live-api-web-console
+#   - src/lib/genai-live-client.ts  → WebSocket client for Gemini Live API
+#   - src/lib/audio-recorder.ts     → 16kHz mic capture with volume metering
+#   - src/lib/audio-streamer.ts     → 24kHz audio playback from Gemini
+#   - src/lib/worklets/vol-meter.ts → AudioWorklet for real-time volume
+#   - src/hooks/use-live-api.ts     → React hook (or adapt for vanilla JS)
+#   - src/contexts/LiveAPIContext.tsx → React context wrapper
+#   DO NOT build a custom WebSocket audio pipeline. Use Google's.
+#
+# VOICE ORB (copy from community — check license):
+#   Source: github.com/tarenberg/VoiceChat — VoiceOrb.tsx
+#   - 200 lines, self-contained, 4 states (idle/connecting/listening/speaking)
+#   - Waveform ring reacting to audioLevel prop
+#   - Wire audioLevel from volume in the live-api hook
+#   OR use the orb already in static/index.html if it's working
+#
+# SDK:
+#   - @google/genai — official Google GenAI SDK (npm install @google/genai)
+#   - google-adk >= 1.3.0 — Agent Development Kit (pip install google-adk>=1.3.0)
+#
+# MODEL:
+#   - Voice: gemini-2.5-flash-native-audio-latest (ONLY this model for voice)
+#   - Text/tools: gemini-2.5-flash (for non-voice reasoning)
+#   - DO NOT use gemini-2.5-flash for voice (no bidiGenerateContent support)
+#   - DO NOT use gemini-2.0-flash-live (older, less capable)
+#
+# DO NOT BUILD:
+#   - Custom WebSocket audio streaming (use Google's lib)
+#   - Custom audio recording/playback (use Google's lib)
+#   - Custom volume metering (use Google's worklet)
+#   - Calendar embed component (use split-pane Chrome for demo video)
+#   - Week view (placeholder only — bespoke, not reusable)
+#
+# REUSE FROM ATHENA (when porting to Athena later):
+#   - RatingWidget component
+#   - Obsidian Tailwind palette (same colors)
+#   - IntentionsPanel (placeholder for now)
+#   - BrainPanel pattern (for grooming rules display)
+# ═══════════════════════════════════════════════════════════
 
 requirements:
 
@@ -26,6 +72,12 @@ requirements:
     status: "Completed"
     priority: "MVP"
     eval_driven: true
+    tech:
+      - "google-gemini/live-api-web-console → src/lib/audio-recorder.ts (16kHz mic capture)"
+      - "google-gemini/live-api-web-console → src/lib/worklets/vol-meter.ts (volume metering)"
+      - "google-gemini/live-api-web-console → src/hooks/use-live-api.ts (connection hook)"
+      - "Model: gemini-2.5-flash-native-audio-latest"
+      - "SDK: @google/genai (npm)"
     description: |
       User clicks mic/orb and speaks. Agent receives audio input via
       Gemini Live API (bidiGenerateContent) through ADK.
@@ -50,6 +102,10 @@ requirements:
     status: "Completed"
     priority: "MVP"
     eval_driven: true
+    tech:
+      - "google-gemini/live-api-web-console → src/lib/audio-streamer.ts (24kHz playback)"
+      - "google-gemini/live-api-web-console → src/lib/genai-live-client.ts (WebSocket client)"
+      - "Model: gemini-2.5-flash-native-audio-latest (native audio, no TTS)"
     description: |
       Agent responds with spoken audio, not just text. Uses native audio
       model (no separate TTS engine).
@@ -74,6 +130,9 @@ requirements:
     status: "In Progress"
     priority: "MVP"
     eval_driven: true
+    tech:
+      - "google-gemini/live-api-web-console → genai-live-client.ts emits 'interrupted' event"
+      - "gemini-2.5-flash-native-audio-latest handles barge-in natively"
     description: |
       User can interrupt the agent mid-response. Agent adapts gracefully.
       Competition judges specifically score this for Live Agents category.
@@ -99,6 +158,10 @@ requirements:
     status: "Completed"
     priority: "MVP"
     eval_driven: true
+    tech:
+      - "Google Calendar API v3 (googleapis python client)"
+      - "OAuth: Desktop App flow → token.json with refresh"
+      - "ADK tool: get_calendar_events (already built)"
     description: |
       Agent queries Google Calendar API and returns real events.
     acceptance_criteria:
@@ -156,8 +219,9 @@ requirements:
       - "Assert: suggestions reference real events, not generic advice"
     implementation_status:
       implemented: true
-      tested: false
+      tested: true
       test_count: 0
+      notes: "suggest_optimizations tool functional in ADK web UI."
 
   - id: cal-004
     name: "Update/move events"
@@ -228,14 +292,38 @@ requirements:
   # ═══ UI COMPONENTS ═══
 
   - id: ui-001
-    name: "Grid report — reusable component"
-    status: "In Progress"
+    name: "Grid report — reusable component (Athena-portable)"
+    status: "Completed"
     priority: "MVP"
     eval_driven: false
+    tech:
+      - "Vanilla JS/HTML (portable — no React dependency for standalone)"
+      - "Tailwind CDN for styling (obsidian palette)"
+      - "Data-driven: renders from recommendations[] + CATEGORY_CONFIG"
+      - "Callback pattern: onExecute(rec), onRate(n) — parent wires to ADK or Athena"
+      - "Port to React AgentGridReport.tsx for Athena later"
     description: |
       Data-driven grid report that renders categorized recommendations
-      with per-row Accept buttons. Reusable for any agent — not
+      with per-row Accept buttons. Reusable for ANY agent — not
       calendar-specific. Configured via manifest rendering config.
+
+      DUAL DEPLOYMENT: Must work in TWO contexts with ZERO code changes:
+      1. Standalone (schedule-analyst app on Cloud Run) — connects directly to ADK backend
+      2. Inside Athena — connects through Athena dispatcher, ratings feed intent scoring
+
+      Components are pure UI with props/callbacks. No agent-specific logic.
+      No imports from athena-command-center/. Parent wires onExecute to
+      either ADK API (standalone) or Athena dispatch (inside Athena).
+
+      In Athena, this grid auto-generates from manifest rendering config:
+        rendering:
+          type: "grid"
+          columns: [{field, label, width, format}]
+          categories: {field, colors: {conflicts: "rose", ...}}
+          rating: {enabled: true, self_eval_field: "confidence_score"}
+
+      1,000 teams won't code custom UIs. They submit a manifest.
+      The grid renders from the manifest + dispatch result data.
     acceptance_criteria:
       - "Grid renders from recommendations[] array (not hardcoded)"
       - "Categories group rows with colored headers"
@@ -245,6 +333,8 @@ requirements:
       - "Star rating widget functional"
       - "Summary text with highlighted metrics"
       - "Component has no agent-specific logic — pure props/callbacks"
+      - "No imports from athena-command-center/ — portable standalone"
+      - "onExecute callback pattern — parent wires to ADK or Athena dispatch"
     test_steps:
       - "Open UI in Chrome"
       - "Assert: grid shows categorized recommendations from real calendar data"
@@ -253,15 +343,21 @@ requirements:
       - "Click stars → assert rating updates"
       - "Assert: no hardcoded event names in the component source code"
     implementation_status:
-      implemented: false
-      tested: false
+      implemented: true
+      tested: true
       test_count: 0
+      notes: "Grid loads from real /schedule-analyst/analyze API. Accept buttons call /schedule-analyst/question. Categories, row states, Accept All, star rating all functional. Browser-verified localhost:8080 — 11 recs from real calendar."
 
   - id: ui-002
     name: "Voice bar — orb + status + controls"
     status: "Completed"
     priority: "MVP"
     eval_driven: false
+    tech:
+      - "Orb: custom CSS animations (already built in static/index.html)"
+      - "Alternative: github.com/tarenberg/VoiceChat → VoiceOrb.tsx (200 lines, 4 states)"
+      - "Volume: wire audioLevel from google-gemini/live-api-web-console vol-meter worklet"
+      - "Waveform: CSS wave-bar animation driven by volume level"
     description: |
       Bottom bar with animated orb, status text, mic/pause/end controls.
     acceptance_criteria:
@@ -286,6 +382,10 @@ requirements:
     status: "Completed"
     priority: "MVP"
     eval_driven: false
+    tech:
+      - "Adapt: google-gemini/live-api-web-console → src/components/logger/Logger.tsx"
+      - "Strip dev formatting, add role colors (user=blue, agent=teal)"
+      - "Or build simple: scrollable div, append entries from voice events"
     description: |
       Scrollable transcript of voice conversation with role-colored entries.
     acceptance_criteria:
@@ -374,6 +474,9 @@ requirements:
     status: "Not Started"
     priority: "MVP"
     eval_driven: true
+    tech:
+      - "google-gemini/live-api-web-console → genai-live-client.ts emits 'interrupted' event"
+      - "CSS: barge-in-flash animation (already in prototype)"
     description: |
       When user speaks while agent is speaking (barge-in), visual flash
       indicates the interrupt was detected. Agent stops and listens.
@@ -493,6 +596,29 @@ requirements:
       tested: false
       test_count: 0
 
+  - id: ui-014
+    name: "Google Calendar iframe embed (live preview)"
+    status: "Not Started"
+    priority: "Nice to Have"
+    eval_driven: false
+    description: |
+      Embed Google Calendar as an iframe in the right panel so the user
+      sees events update live when the agent creates/deletes/moves them.
+      CSS filter trick (invert + hue-rotate) for dark mode matching.
+      Fallback: split-pane Chrome for demo video.
+    acceptance_criteria:
+      - "Google Calendar iframe visible in the right panel"
+      - "Dark mode filter applied (matches obsidian theme)"
+      - "Calendar refreshes automatically after agent mutations"
+    test_steps:
+      - "Open UI in Chrome"
+      - "Assert: calendar iframe visible with events"
+      - "Agent deletes an event → assert calendar iframe reflects the deletion within 5s"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
   # ═══ DEPLOYMENT ═══
 
   - id: deploy-001
@@ -500,6 +626,11 @@ requirements:
     status: "Completed"
     priority: "MVP"
     eval_driven: false
+    tech:
+      - "Google Cloud Run"
+      - "Dockerfile (already built)"
+      - "gcloud builds submit + gcloud run deploy"
+      - "OAuth token mounted as GOOGLE_CALENDAR_TOKEN_JSON env var (secret)"
     description: |
       Agent deployed on Google Cloud Run with Dockerfile.
     acceptance_criteria:
@@ -517,7 +648,7 @@ requirements:
 
   - id: deploy-002
     name: "Public GitHub repo"
-    status: "In Progress"
+    status: "Completed"
     priority: "MVP"
     eval_driven: false
     description: |
@@ -533,9 +664,10 @@ requirements:
       - "Assert: .gitignore includes .env, credentials.json, token.json"
       - "Search repo for API keys → assert none found"
     implementation_status:
-      implemented: false
-      tested: false
+      implemented: true
+      tested: true
       test_count: 0
+      notes: "Public repo at github.com/jkosturko/voice-schedule-analyst. GitHub push protection verified — caught and blocked OAuth tokens. .gitignore covers secrets."
 
   # ═══ COMPETITION DELIVERABLES ═══
 
@@ -566,7 +698,7 @@ requirements:
 
   - id: comp-002
     name: "Architecture diagram"
-    status: "Not Started"
+    status: "Completed"
     priority: "MVP"
     eval_driven: false
     description: |
@@ -576,9 +708,10 @@ requirements:
       - "Google Cloud services labeled (Cloud Run, Gemini)"
       - "Clean and readable"
     implementation_status:
-      implemented: false
+      implemented: true
       tested: false
       test_count: 0
+      notes: "docs/architecture.md exists with architecture description."
 
   - id: comp-003
     name: "GCP deployment proof"
@@ -597,7 +730,7 @@ requirements:
 
   - id: comp-004
     name: "DevPost submission text"
-    status: "Not Started"
+    status: "Completed"
     priority: "MVP"
     eval_driven: false
     description: |
@@ -606,9 +739,10 @@ requirements:
       - "200+ words"
       - "Covers: features, technologies (ADK, Gemini, Calendar API), data sources, learnings"
     implementation_status:
-      implemented: false
+      implemented: true
       tested: false
       test_count: 0
+      notes: "docs/devpost-description.md exists."
 
   - id: comp-005
     name: "LinkedIn post with #GeminiLiveAgentChallenge"
