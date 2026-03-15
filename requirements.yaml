@@ -1,0 +1,434 @@
+---
+version: "1.0.0"
+updated_at: "2026-03-16"
+agent: "schedule-analyst"
+competition: "gemini-live-agent-challenge-2026"
+changelog:
+  - "1.0.0 (2026-03-16): Initial requirements — competition submission MVP"
+
+# Schedule Analyst Agent — Requirements & Acceptance Criteria
+#
+# Every feature has:
+#   - acceptance_criteria: what "done" looks like
+#   - test_steps: literal steps to verify (browser-first)
+#   - implementation_status: { implemented: true/false, tested: true/false, test_count: N }
+#   - eval_driven: true/false
+#
+# RULE: tested: true ONLY if verified in browser or via live agent interaction.
+# Unit tests alone do NOT count as tested.
+
+requirements:
+
+  # ═══ VOICE INTERACTION ═══
+
+  - id: voice-001
+    name: "Voice input — mic capture"
+    status: "Completed"
+    priority: "MVP"
+    eval_driven: true
+    description: |
+      User clicks mic/orb and speaks. Agent receives audio input via
+      Gemini Live API (bidiGenerateContent) through ADK.
+    acceptance_criteria:
+      - "Mic button/orb toggles listening state"
+      - "Audio is streamed to Gemini 2.5 Flash Native Audio via ADK"
+      - "User's speech is transcribed and processed by the agent"
+    test_steps:
+      - "Open agent UI in Chrome"
+      - "Click the mic button or orb"
+      - "Say: 'What does tomorrow look like?'"
+      - "Assert: agent processes the speech (transcript shows user text OR agent responds)"
+      - "Assert: no console errors matching /bidiGenerateContent|404|model.*not found/"
+    implementation_status:
+      implemented: true
+      tested: true
+      test_count: 0
+      notes: "Jessica confirmed voice working 2026-03-16. Model: gemini-2.5-flash-native-audio-latest"
+
+  - id: voice-002
+    name: "Voice output — agent speaks back"
+    status: "Completed"
+    priority: "MVP"
+    eval_driven: true
+    description: |
+      Agent responds with spoken audio, not just text. Uses native audio
+      model (no separate TTS engine).
+    acceptance_criteria:
+      - "Agent produces AUDIO output (spoken words through speakers)"
+      - "Audio is natural-sounding (native audio, not robotic TTS)"
+      - "Response references real calendar events (grounded)"
+    test_steps:
+      - "Open agent UI in Chrome"
+      - "Click mic, say: 'What does my week look like?'"
+      - "Assert: you HEAR the agent speak back (audio output, not just text)"
+      - "Assert: response mentions specific events from your calendar"
+      - "Assert: voice quality is natural, not robotic"
+    implementation_status:
+      implemented: true
+      tested: true
+      test_count: 0
+      notes: "Jessica confirmed brilliant audio quality 2026-03-16"
+
+  - id: voice-003
+    name: "Interrupt handling"
+    status: "In Progress"
+    priority: "MVP"
+    eval_driven: true
+    description: |
+      User can interrupt the agent mid-response. Agent adapts gracefully.
+      Competition judges specifically score this for Live Agents category.
+    acceptance_criteria:
+      - "User speaks while agent is responding → agent stops and listens"
+      - "Agent adapts response to the new input (doesn't repeat old response)"
+      - "No audio overlap or garbled output"
+    test_steps:
+      - "Click mic, say: 'Tell me about my whole week'"
+      - "WHILE agent is speaking, say: 'Actually just focus on Monday'"
+      - "Assert: agent stops previous response"
+      - "Assert: agent responds about Monday specifically"
+      - "Assert: no audio overlap"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
+  # ═══ CALENDAR TOOLS ═══
+
+  - id: cal-001
+    name: "Read calendar events"
+    status: "Completed"
+    priority: "MVP"
+    eval_driven: true
+    description: |
+      Agent queries Google Calendar API and returns real events.
+    acceptance_criteria:
+      - "get_calendar_events tool returns events from user's Google Calendar"
+      - "Events include title, start time, end time"
+      - "Time range parsing works (today, this week, next 3 days)"
+    test_steps:
+      - "In ADK web UI, type: 'What's on my calendar today?'"
+      - "Assert: agent calls get_calendar_events tool"
+      - "Assert: response includes real event names from your calendar"
+      - "Assert: times are correct (not UTC when should be local)"
+    implementation_status:
+      implemented: true
+      tested: true
+      test_count: 55
+      notes: "Verified in ADK web UI with real calendar data"
+
+  - id: cal-002
+    name: "Find conflicts"
+    status: "Completed"
+    priority: "MVP"
+    eval_driven: true
+    description: |
+      Agent detects overlapping events and triple-bookings.
+    acceptance_criteria:
+      - "find_conflicts tool detects overlapping events"
+      - "Triple-bookings flagged as critical"
+      - "Response clearly states which events conflict and when"
+    test_steps:
+      - "Type: 'Do I have any scheduling conflicts this week?'"
+      - "Assert: agent calls find_conflicts tool"
+      - "Assert: response identifies specific conflicting events by name"
+      - "Assert: overlap times are stated"
+    implementation_status:
+      implemented: true
+      tested: true
+      test_count: 55
+      notes: "Verified — finds real conflicts"
+
+  - id: cal-003
+    name: "Suggest optimizations"
+    status: "Completed"
+    priority: "MVP"
+    eval_driven: true
+    description: |
+      Agent suggests schedule changes based on brain rules.
+    acceptance_criteria:
+      - "suggest_optimizations tool generates actionable recommendations"
+      - "Recommendations reference brain rules (R-01, R-09, etc.)"
+      - "Suggestions include specific times and event names"
+    test_steps:
+      - "Type: 'How can I optimize my week?'"
+      - "Assert: agent calls suggest_optimizations"
+      - "Assert: response includes specific move/shift/add suggestions"
+      - "Assert: suggestions reference real events, not generic advice"
+    implementation_status:
+      implemented: true
+      tested: false
+      test_count: 0
+
+  - id: cal-004
+    name: "Update/move events"
+    status: "In Progress"
+    priority: "MVP"
+    eval_driven: true
+    description: |
+      Agent can move events to new times via Google Calendar API.
+    acceptance_criteria:
+      - "update_event tool changes event start/end time in Google Calendar"
+      - "Event persists in Google Calendar after update (verified via re-query)"
+      - "Agent confirms the change in voice/text response"
+    test_steps:
+      - "Say: 'Move the sprint review to 2 PM'"
+      - "Assert: agent calls update_event tool"
+      - "Assert: event is actually moved in Google Calendar"
+      - "Say: 'What's on Thursday now?' — assert moved event shows at new time"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
+  - id: cal-005
+    name: "Delete events"
+    status: "In Progress"
+    priority: "MVP"
+    eval_driven: true
+    description: |
+      Agent can remove duplicate/unwanted events from Google Calendar.
+    acceptance_criteria:
+      - "delete_event tool removes event from Google Calendar"
+      - "Event no longer appears in calendar after deletion"
+      - "Agent confirms deletion in voice/text response"
+    test_steps:
+      - "Say: 'Delete the duplicate meetings on Sunday'"
+      - "Assert: agent calls delete_event tool"
+      - "Assert: duplicate events are removed from Google Calendar"
+      - "Say: 'What's on Sunday now?' — assert duplicates gone"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
+  - id: cal-006
+    name: "Create events"
+    status: "In Progress"
+    priority: "MVP"
+    eval_driven: true
+    description: |
+      Agent can add new events (packing blocks, focus time, travel buffer).
+    acceptance_criteria:
+      - "create_event tool adds event to Google Calendar"
+      - "Event appears in calendar with correct title, start, end"
+      - "Agent confirms creation in voice/text response"
+    test_steps:
+      - "Say: 'Add a packing block Thursday at 7 PM'"
+      - "Assert: agent calls create_event tool"
+      - "Assert: event appears in Google Calendar"
+      - "Say: 'What's on Thursday evening?' — assert packing block shows"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
+  # ═══ UI COMPONENTS ═══
+
+  - id: ui-001
+    name: "Grid report — reusable component"
+    status: "In Progress"
+    priority: "MVP"
+    eval_driven: false
+    description: |
+      Data-driven grid report that renders categorized recommendations
+      with per-row Accept buttons. Reusable for any agent — not
+      calendar-specific. Configured via manifest rendering config.
+    acceptance_criteria:
+      - "Grid renders from recommendations[] array (not hardcoded)"
+      - "Categories group rows with colored headers"
+      - "Per-row Accept button triggers execute callback"
+      - "Row states: pending → running → accepted/failed"
+      - "Accept All button processes all pending rows"
+      - "Star rating widget functional"
+      - "Summary text with highlighted metrics"
+      - "Component has no agent-specific logic — pure props/callbacks"
+    test_steps:
+      - "Open UI in Chrome"
+      - "Assert: grid shows categorized recommendations from real calendar data"
+      - "Click Accept on one row → assert loader then accepted state"
+      - "Click Accept All → assert all rows process"
+      - "Click stars → assert rating updates"
+      - "Assert: no hardcoded event names in the component source code"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
+  - id: ui-002
+    name: "Voice bar — orb + status + controls"
+    status: "Completed"
+    priority: "MVP"
+    eval_driven: false
+    description: |
+      Bottom bar with animated orb, status text, mic/pause/end controls.
+    acceptance_criteria:
+      - "Orb click toggles idle/listening states"
+      - "Status text shows Ready/Listening/Thinking/Speaking"
+      - "Mute, Pause, End buttons functional"
+      - "Audio waveform animates during listening/speaking"
+    test_steps:
+      - "Open UI in Chrome"
+      - "Click orb → assert status changes to Listening"
+      - "Speak → assert status changes to Thinking then Speaking"
+      - "Click Mute → assert mic muted"
+      - "Click End → assert session ends"
+    implementation_status:
+      implemented: true
+      tested: true
+      test_count: 0
+      notes: "Voice bar with 6 orb states (idle/listening/thinking/speaking/paused/muted), ripple rings, waveform visualization, thought dots, mute/pause/end controls, keyboard shortcuts (Space/M/P/A). Browser-tested on Cloud Run."
+
+  - id: ui-003
+    name: "Live transcript panel"
+    status: "Completed"
+    priority: "MVP"
+    eval_driven: false
+    description: |
+      Scrollable transcript of voice conversation with role-colored entries.
+    acceptance_criteria:
+      - "Transcript shows user and agent messages"
+      - "User messages in teal, agent messages in purple"
+      - "Auto-scrolls to newest message"
+    test_steps:
+      - "Have a voice conversation with the agent"
+      - "Assert: transcript panel shows both sides of the conversation"
+      - "Assert: entries are color-coded by role"
+      - "Assert: newest message is visible (auto-scrolled)"
+    implementation_status:
+      implemented: true
+      tested: true
+      test_count: 0
+      notes: "Transcript panel with role-colored entries (user=blue, agent=teal, system=grey), timestamps, auto-scroll. Browser-tested on Cloud Run."
+
+  # ═══ DEPLOYMENT ═══
+
+  - id: deploy-001
+    name: "Cloud Run deployment"
+    status: "Completed"
+    priority: "MVP"
+    eval_driven: false
+    description: |
+      Agent deployed on Google Cloud Run with Dockerfile.
+    acceptance_criteria:
+      - "Agent accessible via Cloud Run URL"
+      - "Health check endpoint responds"
+      - "Calendar tools work from Cloud Run (OAuth token mounted as secret)"
+    test_steps:
+      - "curl the Cloud Run URL → assert 200 response"
+      - "Send a query via the Cloud Run UI → assert response with calendar data"
+    implementation_status:
+      implemented: true
+      tested: true
+      test_count: 0
+      notes: "Verified on Cloud Run: health, gemini, analyze (8 events, 2 conflicts), question endpoints. UI serves at root. Real calendar data via GOOGLE_CALENDAR_TOKEN_JSON env var."
+
+  - id: deploy-002
+    name: "Public GitHub repo"
+    status: "In Progress"
+    priority: "MVP"
+    eval_driven: false
+    description: |
+      Public repo with comprehensive README and setup instructions.
+    acceptance_criteria:
+      - "Repo is public on GitHub"
+      - "README includes: setup instructions, architecture overview, prerequisites"
+      - "No secrets committed (.env, credentials.json, token.json in .gitignore)"
+      - "Someone could clone and run it following the README"
+    test_steps:
+      - "Visit the GitHub repo URL → assert public and accessible"
+      - "Assert: README exists with setup steps"
+      - "Assert: .gitignore includes .env, credentials.json, token.json"
+      - "Search repo for API keys → assert none found"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
+  # ═══ COMPETITION DELIVERABLES ═══
+
+  - id: comp-001
+    name: "Demo video (max 4 min)"
+    status: "Not Started"
+    priority: "MVP"
+    eval_driven: false
+    description: |
+      Screen recording showing real software working. Voice interaction
+      visible in real-time. Uploaded to YouTube/Vimeo.
+    acceptance_criteria:
+      - "Video is ≤ 4 minutes"
+      - "Shows actual voice interaction (not mockup)"
+      - "Includes problem statement and solution pitch"
+      - "Uploaded to YouTube or Vimeo (public)"
+      - "English language"
+    test_steps:
+      - "Watch the video end-to-end"
+      - "Assert: voice interaction is real (agent speaks with calendar data)"
+      - "Assert: problem statement is clear in first 30 seconds"
+      - "Assert: ≤ 4 minutes"
+      - "Assert: video URL is publicly accessible"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
+  - id: comp-002
+    name: "Architecture diagram"
+    status: "Not Started"
+    priority: "MVP"
+    eval_driven: false
+    description: |
+      Visual showing Gemini Live API → ADK Agent → Google Calendar.
+    acceptance_criteria:
+      - "Diagram shows: User → Gemini Live API → ADK Agent → Calendar API"
+      - "Google Cloud services labeled (Cloud Run, Gemini)"
+      - "Clean and readable"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
+  - id: comp-003
+    name: "GCP deployment proof"
+    status: "Not Started"
+    priority: "MVP"
+    eval_driven: false
+    description: |
+      Screen recording or code showing app running on Google Cloud.
+    acceptance_criteria:
+      - "Screen recording of Cloud Run console showing the service, OR"
+      - "Code file showing Cloud Run/Vertex AI API usage"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
+  - id: comp-004
+    name: "DevPost submission text"
+    status: "Not Started"
+    priority: "MVP"
+    eval_driven: false
+    description: |
+      200+ word description covering features, technologies, data sources, learnings.
+    acceptance_criteria:
+      - "200+ words"
+      - "Covers: features, technologies (ADK, Gemini, Calendar API), data sources, learnings"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
+  - id: comp-005
+    name: "LinkedIn post with #GeminiLiveAgentChallenge"
+    status: "In Progress"
+    priority: "Bonus"
+    eval_driven: false
+    description: |
+      Public LinkedIn post for +0.6 bonus points.
+    acceptance_criteria:
+      - "Posted on LinkedIn (public)"
+      - "Includes #GeminiLiveAgentChallenge hashtag"
+      - "States it was created for the hackathon"
+    implementation_status:
+      implemented: true
+      tested: false
+      test_count: 0
