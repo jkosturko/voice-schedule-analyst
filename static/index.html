@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Athena | Gemini Live Calendar Agent</title>
+    <title>Schedule Analyst | Gemini Live Calendar Agent</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/lucide@0.344.0/dist/umd/lucide.min.js"></script>
@@ -165,9 +165,6 @@
         .btn-action:hover { background: #14b8a6; color: #000; }
         .btn-action:disabled { opacity: 0.3; cursor: default; pointer-events: none; }
 
-        .star-rating { cursor: pointer; color: #30363d; transition: color 0.15s; }
-        .star-rating.filled { color: #eab308; }
-        .star-rating:hover { color: #facc15; }
 
         .loader {
             width: 14px; height: 14px;
@@ -199,7 +196,7 @@
                 <i data-lucide="brain" class="w-4 h-4 text-white"></i>
             </div>
             <div>
-                <h1 class="text-[11px] font-black tracking-widest text-white uppercase">Athena</h1>
+                <h1 class="text-[11px] font-black tracking-widest text-white uppercase">Schedule Analyst</h1>
                 <p class="text-[8px] font-mono text-slate-500 uppercase tracking-wider">Gemini Live Calendar Agent &bull; v1.0</p>
             </div>
         </div>
@@ -370,7 +367,7 @@
             <div class="p-4 max-h-[200px] overflow-y-auto">
                 <div class="flex items-center gap-2 mb-3">
                     <i data-lucide="book-open" class="w-3.5 h-3.5 text-purple-400"></i>
-                    <h3 class="text-[9px] font-black text-white uppercase tracking-widest">Grooming Rules</h3>
+                    <h3 class="text-[9px] font-black text-white uppercase tracking-widest">Agent Policies</h3>
                 </div>
                 <div class="space-y-1.5 text-[10px] text-slate-500" id="brain-rules">
                     <div class="flex items-start gap-2"><span class="text-purple-400 shrink-0">R-01</span> Never move deep work or focus blocks</div>
@@ -669,7 +666,6 @@
             confidenceScore: 0.98,
         };
 
-        let currentRating = 0;
         let gridReportShown = false;
 
         function renderGridReport() {
@@ -715,12 +711,10 @@
                                 <i data-lucide="check-check" class="w-3 h-3"></i> Accept All
                             </button>
                             <button onclick="toggleVoice()" class="px-4 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 uppercase tracking-widest hover:bg-blue-500 hover:text-black transition-all flex items-center gap-2">
-                                <i data-lucide="mic" class="w-3 h-3"></i> Discuss with Athena
+                                <i data-lucide="mic" class="w-3 h-3"></i> Discuss
                             </button>
                         </div>
                         <div class="flex items-center gap-4">
-                            <span class="text-slate-500 uppercase">Rate Alignment:</span>
-                            <div class="flex gap-1" id="star-container"></div>
                             <span class="text-[9px] font-mono text-slate-600" id="self-eval-score">AI confidence: ${Math.round(gridReportConfig.confidenceScore * 100)}%</span>
                         </div>
                     </div>
@@ -729,7 +723,6 @@
 
             feed.appendChild(block);
             renderGridBody();
-            renderStars();
             if (typeof lucide !== 'undefined') lucide.createIcons();
             gridReportShown = true;
 
@@ -798,17 +791,6 @@
             if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
-        function renderStars() {
-            const container = document.getElementById('star-container');
-            if (!container) return;
-            container.innerHTML = '';
-            for (let i = 1; i <= 5; i++) {
-                const span = document.createElement('span');
-                span.innerHTML = '&#9733;';
-                span.className = `star-rating text-lg ${i <= currentRating ? 'filled' : ''}`;
-                span.onclick = () => rate(i);
-                container.appendChild(span);
-            }
         }
 
         async function executeAction(id, callback) {
@@ -882,12 +864,6 @@
             next();
         }
 
-        function rate(n) {
-            currentRating = n;
-            renderStars();
-            console.log(`[RATING] User rated alignment: ${n}/5`);
-            addTranscriptLine('system', `Alignment rated: ${n}/5 stars`);
-        }
 
         // ══════════════════════════════════════════════════════
         // LIVE ANALYSIS — loads real data on page load
@@ -1001,7 +977,7 @@
             }
         }
 
-        // Public API for Athena integration or standalone
+        // Public API for external integration or standalone
         window.AgentGridReport = {
             loadRecommendations: (recs, config) => {
                 recommendations = recs;
@@ -1114,7 +1090,7 @@
                     break;
                 case 'speaking':
                     orb.classList.add('speaking');
-                    label.textContent = 'Athena Speaking';
+                    label.textContent = 'Agent Speaking';
                     label.className = 'text-[10px] font-black uppercase tracking-widest text-teal-400';
                     sub.textContent = 'Click orb to interrupt';
                     waveform.classList.add('active');
@@ -1142,7 +1118,7 @@
 
             // Update transcript status
             const statusEl = document.getElementById('transcript-status');
-            const statusMap = { idle: 'Waiting...', listening: 'User speaking', thinking: 'Processing...', speaking: 'Athena speaking', paused: 'Paused', muted: 'Muted' };
+            const statusMap = { idle: 'Waiting...', listening: 'User speaking', thinking: 'Processing...', speaking: 'Agent speaking', paused: 'Paused', muted: 'Muted' };
             statusEl.textContent = statusMap[state] || 'Waiting...';
         }
 
@@ -1304,7 +1280,7 @@
             const iconBg = role === 'user' ? 'bg-blue-500/10 border-blue-500/20' : 'bg-teal-500/10 border-teal-500/20';
             const iconColor = role === 'user' ? 'text-blue-400' : 'text-teal-400';
             const iconName = role === 'user' ? 'user' : 'bot';
-            const label = role === 'user' ? 'You' : 'Athena';
+            const label = role === 'user' ? 'You' : 'Agent';
             const labelColor = role === 'user' ? 'text-blue-400' : 'text-teal-400';
 
             const now = new Date();
@@ -1353,7 +1329,7 @@
             const roleLabel = type === 'user'
                 ? '<span class="font-black text-blue-400 uppercase text-[8px] tracking-wider">User</span>'
                 : type === 'agent'
-                ? '<span class="font-black text-teal-400 uppercase text-[8px] tracking-wider">Athena</span>'
+                ? '<span class="font-black text-teal-400 uppercase text-[8px] tracking-wider">Agent</span>'
                 : '<span class="font-black text-slate-600 uppercase text-[8px] tracking-wider">System</span>';
 
             div.innerHTML = `
