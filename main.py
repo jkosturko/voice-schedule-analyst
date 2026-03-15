@@ -7,8 +7,9 @@ This file provides webhook-compatible endpoints for Athena integration + health 
 import os
 import json
 import logging
+import functools
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, Response
 from google import genai
 
 from schedule_analyst.calendar_tools import get_calendar_events, find_conflicts
@@ -19,14 +20,44 @@ logger = logging.getLogger(__name__)
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 app = Flask(__name__, static_folder=STATIC_DIR)
 
+# ── Password protection (Cloud Run only) ──
+# Set APP_PASSWORD env var on Cloud Run to enable.
+# Not set locally → no password required.
+APP_PASSWORD = os.environ.get("APP_PASSWORD")
+
+
+def check_auth(username, password):
+    return password == APP_PASSWORD
+
+
+def authenticate():
+    return Response(
+        "Access denied. Please provide credentials.", 401,
+        {"WWW-Authenticate": 'Basic realm="Schedule Analyst"'},
+    )
+
+
+def requires_auth(f):
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        if not APP_PASSWORD:
+            return f(*args, **kwargs)  # No password set → open access (local dev)
+        auth = request.authorization
+        if not auth or not check_auth(auth.username, auth.password):
+            return authenticate()
+        return f(*args, **kwargs)
+    return decorated
+
 
 @app.route("/", methods=["GET"])
+@requires_auth
 def index():
     """Serve the Gemini Live UI."""
     return send_from_directory(STATIC_DIR, "index.html")
 
 
 @app.route("/api", methods=["GET"])
+@requires_auth
 def api_index():
     """API info — available endpoints."""
     return jsonify({
@@ -78,6 +109,7 @@ def health_gemini():
 
 
 @app.route("/schedule-analyst/analyze", methods=["POST"])
+@requires_auth
 def analyze():
     """Analyze schedule — find conflicts, gaps, back-to-back warnings."""
     data = request.get_json(silent=True) or {}
@@ -106,6 +138,7 @@ def analyze():
 
 
 @app.route("/schedule-analyst/optimize", methods=["POST"])
+@requires_auth
 def optimize():
     """Suggest schedule optimizations."""
     data = request.get_json(silent=True) or {}
@@ -132,6 +165,7 @@ def optimize():
 
 
 @app.route("/schedule-analyst/question", methods=["POST"])
+@requires_auth
 def question():
     """Answer a natural language question about the schedule."""
     data = request.get_json(silent=True) or {}
