@@ -116,6 +116,68 @@
         .barge-in-flash { animation: barge-flash 0.3s ease-out; }
         @keyframes barge-flash { 0% { background: rgba(244, 63, 94, 0.2); } 100% { background: transparent; } }
 
+        /* ── Grid Report ── */
+        .grid-header {
+            display: grid;
+            grid-template-columns: 110px 1fr 70px 110px;
+            gap: 12px;
+            padding: 8px 16px;
+            background: rgba(33, 38, 45, 0.8);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .rec-row {
+            display: grid;
+            grid-template-columns: 110px 1fr 70px 110px;
+            gap: 12px;
+            padding: 10px 16px;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            transition: all 0.3s ease;
+        }
+        .rec-row:hover { background: rgba(255,255,255,0.02); }
+        .rec-row.applied { opacity: 0.35; }
+        .rec-row.applied .rec-title { text-decoration: line-through; text-decoration-color: rgba(255,255,255,0.3); }
+        .rec-row.running { background: rgba(20, 184, 166, 0.05); border-left: 2px solid var(--accent-teal); }
+        .rec-row.failed { background: rgba(244, 63, 94, 0.05); border-left: 2px solid var(--accent-rose); }
+
+        .category-header {
+            padding: 6px 16px;
+            font-size: 9px; font-weight: 900;
+            text-transform: uppercase; letter-spacing: 0.1em;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            display: flex; align-items: center; gap: 8px;
+        }
+        .category-header.conflicts { background: rgba(244, 63, 94, 0.05); color: var(--accent-rose); }
+        .category-header.trip_prep { background: rgba(249, 115, 22, 0.05); color: var(--accent-amber); }
+        .category-header.optimizations { background: rgba(20, 184, 166, 0.05); color: var(--accent-teal); }
+
+        .btn-action {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 5px 14px; border-radius: 8px;
+            font-size: 10px; font-weight: 800;
+            text-transform: uppercase; letter-spacing: 0.05em;
+            background: rgba(20, 184, 166, 0.1);
+            border: 1px solid rgba(20, 184, 166, 0.2);
+            color: #14b8a6; cursor: pointer; transition: all 0.2s;
+        }
+        .btn-action:hover { background: #14b8a6; color: #000; }
+        .btn-action:disabled { opacity: 0.3; cursor: default; pointer-events: none; }
+
+        .star-rating { cursor: pointer; color: #30363d; transition: color 0.15s; }
+        .star-rating.filled { color: #eab308; }
+        .star-rating:hover { color: #facc15; }
+
+        .loader {
+            width: 14px; height: 14px;
+            border: 2px solid rgba(20,184,166,0.2);
+            border-top-color: #14b8a6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
         /* ── Scrollbars ── */
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
@@ -235,6 +297,14 @@
                         </div>
                     </div>
 
+                    <!-- Demo Stepper -->
+                    <div class="flex items-center gap-2 mr-2" id="demo-stepper">
+                        <button id="btn-next-step" onclick="advanceDemo()" class="h-10 px-5 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center gap-2 text-blue-400 hover:bg-blue-500 hover:text-black transition-all text-[10px] font-black uppercase tracking-widest">
+                            <i data-lucide="play" class="w-3.5 h-3.5"></i> <span id="next-step-label">Start Demo</span>
+                        </button>
+                        <div class="text-[8px] font-mono text-slate-600 uppercase w-16 text-center" id="step-counter">Step 0/5</div>
+                    </div>
+
                     <!-- Divider -->
                     <div class="w-px h-8 bg-white/10"></div>
 
@@ -331,6 +401,313 @@
         let isPaused = false;
         let sessionSeconds = 0;
         let stateBeforePause = 'idle';
+
+        // ══════════════════════════════════════════════════════
+        // REUSABLE GRID REPORT ENGINE
+        // Data-driven: renders from recommendations[] array
+        // No agent-specific logic — colors from category config
+        // ══════════════════════════════════════════════════════
+
+        const CATEGORY_CONFIG = {
+            conflicts:     { label: 'Conflicts',     icon: 'alert-triangle', cssClass: 'conflicts' },
+            trip_prep:     { label: 'Trip Prep',     icon: 'luggage',        cssClass: 'trip_prep' },
+            optimizations: { label: 'Optimizations', icon: 'sparkles',       cssClass: 'optimizations' },
+        };
+
+        // Recommendations data — in production, comes from ADK agent dispatch result
+        let recommendations = [
+            { id: 0, category: 'conflicts', date: 'Sun Mar 15', title: 'Triple-booked 10 AM slot', description: 'Delete 2x duplicate meetings, keep team standup.', rule_ref: 'R-01', status: 'pending' },
+            { id: 1, category: 'conflicts', date: 'Sun Mar 15', title: 'Overlapping school pickup', description: 'Move pickup calendar to Vivianne — she confirmed Fridays.', rule_ref: 'R-02', status: 'pending' },
+            { id: 2, category: 'conflicts', date: 'Mon Mar 16', title: 'Team sync vs. client call', description: 'Reschedule team sync to 2 PM. Client call is immovable.', rule_ref: 'R-05', status: 'pending' },
+            { id: 3, category: 'trip_prep', date: 'Thu Mar 19', title: 'Packing block missing', description: 'Add "Jessica: lay out clothes for trip" at 7:00 PM.', rule_ref: 'R-03', status: 'pending' },
+            { id: 4, category: 'trip_prep', date: 'Fri Mar 20', title: 'Kids packing delegation', description: 'Rename Friday block to "Vivianne packs kids". Delegate per your rules.', rule_ref: 'R-02', status: 'pending' },
+            { id: 5, category: 'optimizations', date: 'Mon Mar 16', title: 'Prescription pickup timing', description: 'Move to Thursday pre-trip. Rename: "Kyle picks up Rx".', rule_ref: 'R-04', status: 'pending' },
+            { id: 6, category: 'optimizations', date: 'Sat Mar 15', title: 'Airport transit block', description: 'Add "Travel to Airport" at 2:00 PM with 45min buffer.', rule_ref: 'R-11', status: 'pending' },
+            { id: 7, category: 'optimizations', date: 'Wed Mar 18', title: 'Focus time deficit', description: 'Insert 90-min deep work block at 1:30 PM. You have zero protected focus time Wed.', rule_ref: 'R-07', status: 'pending' },
+            { id: 8, category: 'optimizations', date: 'All Week', title: 'Meeting fatigue warning', description: 'Tue has 6h consecutive meetings. Add 15-min buffer breaks between blocks.', rule_ref: 'R-12', status: 'pending' },
+        ];
+
+        let gridReportConfig = {
+            summary: 'Found <span class="text-rose-400 font-bold">3 conflicts</span>, <span class="text-amber-400 font-bold">2 trip prep</span> gaps, <span class="text-teal-400 font-bold">4 optimization</span> opportunities across your week.',
+            confidenceScore: 0.98,
+        };
+
+        let currentRating = 0;
+        let gridReportShown = false;
+
+        function renderGridReport() {
+            const feed = document.getElementById('chat-feed');
+
+            // Remove placeholder
+            const placeholder = feed.querySelector('.min-h-\\[200px\\]');
+            if (placeholder) placeholder.remove();
+
+            // Don't duplicate
+            if (document.getElementById('grid-report-block')) return;
+
+            const block = document.createElement('div');
+            block.id = 'grid-report-block';
+            block.className = 'message-anim';
+
+            block.innerHTML = `
+                <div class="flex gap-4 mb-4">
+                    <div class="w-8 h-8 rounded-lg bg-teal-500/10 border border-teal-500/20 flex items-center justify-center shrink-0">
+                        <i data-lucide="calendar-check" class="w-4 h-4 text-teal-400"></i>
+                    </div>
+                    <div class="pt-0.5">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-[10px] font-black uppercase tracking-widest text-teal-400">Schedule Analysis</span>
+                            <span class="text-[8px] font-mono text-slate-600">just now</span>
+                        </div>
+                        <p class="text-sm text-slate-300 leading-relaxed">${gridReportConfig.summary}</p>
+                    </div>
+                </div>
+
+                <div class="glass-panel rounded-xl overflow-hidden">
+                    <div class="grid-header">
+                        <span class="text-[9px] font-black text-slate-500 uppercase tracking-widest">When</span>
+                        <span class="text-[9px] font-black text-slate-500 uppercase tracking-widest">Recommendation</span>
+                        <span class="text-[9px] font-black text-slate-500 uppercase tracking-widest">Rule</span>
+                        <span class="text-[9px] font-black text-slate-500 uppercase tracking-widest">Action</span>
+                    </div>
+                    <div id="grid-body"></div>
+                    <div class="p-3 bg-white/[0.02] border-t border-white/5 flex items-center justify-between text-[9px] font-black">
+                        <div class="flex items-center gap-3">
+                            <button onclick="acceptAll()" class="px-4 py-2 rounded-lg bg-teal-500/10 border border-teal-500/20 text-teal-400 uppercase tracking-widest hover:bg-teal-500 hover:text-black transition-all flex items-center gap-2" id="btn-accept-all">
+                                <i data-lucide="check-check" class="w-3 h-3"></i> Accept All
+                            </button>
+                            <button onclick="toggleVoice()" class="px-4 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 uppercase tracking-widest hover:bg-blue-500 hover:text-black transition-all flex items-center gap-2">
+                                <i data-lucide="mic" class="w-3 h-3"></i> Discuss with Athena
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span class="text-slate-500 uppercase">Rate Alignment:</span>
+                            <div class="flex gap-1" id="star-container"></div>
+                            <span class="text-[9px] font-mono text-slate-600" id="self-eval-score">AI confidence: ${Math.round(gridReportConfig.confidenceScore * 100)}%</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            feed.appendChild(block);
+            renderGridBody();
+            renderStars();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            gridReportShown = true;
+
+            // Scroll to report
+            const container = document.getElementById('chat-container');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function renderGridBody() {
+            const body = document.getElementById('grid-body');
+            if (!body) return;
+            body.innerHTML = '';
+
+            const categoryOrder = ['conflicts', 'trip_prep', 'optimizations'];
+            const groups = {};
+            for (const rec of recommendations) {
+                if (!groups[rec.category]) groups[rec.category] = [];
+                groups[rec.category].push(rec);
+            }
+
+            for (const cat of categoryOrder) {
+                const items = groups[cat];
+                if (!items || items.length === 0) continue;
+
+                const config = CATEGORY_CONFIG[cat] || { label: cat, icon: 'circle', cssClass: cat };
+
+                // Category header
+                const header = document.createElement('div');
+                header.className = `category-header ${config.cssClass}`;
+                header.innerHTML = `<i data-lucide="${config.icon}" class="w-3 h-3"></i> ${config.label}`;
+                body.appendChild(header);
+
+                // Rows
+                for (const rec of items) {
+                    const row = document.createElement('div');
+                    const stateClasses = rec.status === 'applied' ? 'applied' : rec.status === 'running' ? 'running' : rec.status === 'failed' ? 'failed' : '';
+                    row.className = `rec-row ${stateClasses}`;
+                    row.id = `row-${rec.id}`;
+
+                    let actionHtml;
+                    if (rec.status === 'applied') {
+                        actionHtml = '<span class="text-[10px] text-teal-500/50 font-mono uppercase">Applied</span>';
+                    } else if (rec.status === 'running') {
+                        actionHtml = '<div class="flex items-center gap-2"><div class="loader"></div><span class="text-[10px] text-teal-400 font-mono">Running</span></div>';
+                    } else if (rec.status === 'failed') {
+                        actionHtml = '<span class="text-[10px] text-rose-400 font-mono uppercase">Failed</span>';
+                    } else {
+                        actionHtml = `<button class="btn-action" onclick="executeAction(${rec.id})"><i data-lucide="check" class="w-3 h-3"></i> Accept</button>`;
+                    }
+
+                    row.innerHTML = `
+                        <span class="text-slate-500 text-[11px] font-mono">${rec.date}</span>
+                        <div>
+                            <p class="text-white text-[12px] font-semibold mb-0.5 rec-title">${rec.title}</p>
+                            <p class="text-slate-400 text-[11px]">${rec.description}</p>
+                        </div>
+                        <span class="text-[10px] font-mono text-slate-600">${rec.rule_ref}</span>
+                        <div class="flex gap-1 justify-end">${actionHtml}</div>
+                    `;
+                    body.appendChild(row);
+                }
+            }
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function renderStars() {
+            const container = document.getElementById('star-container');
+            if (!container) return;
+            container.innerHTML = '';
+            for (let i = 1; i <= 5; i++) {
+                const span = document.createElement('span');
+                span.innerHTML = '&#9733;';
+                span.className = `star-rating text-lg ${i <= currentRating ? 'filled' : ''}`;
+                span.onclick = () => rate(i);
+                container.appendChild(span);
+            }
+        }
+
+        function executeAction(id, callback) {
+            const rec = recommendations.find(r => r.id === id);
+            if (!rec || rec.status !== 'pending') { if (callback) callback(); return; }
+
+            rec.status = 'running';
+            renderGridBody();
+
+            setTimeout(() => {
+                rec.status = 'applied';
+                renderGridBody();
+                if (callback) callback();
+            }, 600 + Math.random() * 400);
+        }
+
+        function acceptAll() {
+            const pending = recommendations.filter(r => r.status === 'pending');
+            if (pending.length === 0) return;
+
+            let i = 0;
+            function next() {
+                if (i >= pending.length) return;
+                executeAction(pending[i].id, () => { i++; setTimeout(next, 150); });
+            }
+            next();
+        }
+
+        function rate(n) {
+            currentRating = n;
+            renderStars();
+            console.log(`[RATING] User rated alignment: ${n}/5`);
+            addTranscriptLine('system', `Alignment rated: ${n}/5 stars`);
+        }
+
+        // ══════════════════════════════════════════════════════
+        // DEMO FLOW
+        // ══════════════════════════════════════════════════════
+        let demoStep = -1;
+        const demoSteps = [
+            {
+                label: 'Jessica Speaks',
+                action: () => {
+                    setVoiceState('listening');
+                    addTranscriptLine('user', '"What does my week look like? I\'m flying to Cabo on Saturday."');
+                    addChatMessage('user', 'What does my week look like? I\'m flying to Cabo on Saturday.');
+                    setTimeout(() => {
+                        setVoiceState('thinking');
+                        setTimeout(() => {
+                            setVoiceState('speaking');
+                            addTranscriptLine('agent', 'Your week is packed. I found 3 conflicts — the worst is a triple-booked 10 AM slot. You also have no packing time before your trip. I\'ve prepared 9 recommendations.');
+                            renderGridReport();
+                            setTimeout(() => setVoiceState('idle'), 4000);
+                        }, 2000);
+                    }, 3000);
+                },
+            },
+            {
+                label: 'Accept Conflicts',
+                action: () => {
+                    addTranscriptLine('user', '"Accept all the conflict fixes."');
+                    addChatMessage('user', 'Accept all the conflict fixes.');
+                    [0, 1, 2].forEach((id, i) => setTimeout(() => executeAction(id), i * 500));
+                    setTimeout(() => {
+                        setVoiceState('speaking');
+                        addTranscriptLine('agent', 'Done — deleted the duplicates, moved pickup to Vivianne, and rescheduled team sync to 2 PM.');
+                        addChatMessage('agent', 'Done — deleted the duplicates, moved the school pickup to Vivianne, and rescheduled team sync to 2 PM.');
+                        setTimeout(() => setVoiceState('idle'), 3000);
+                    }, 2500);
+                },
+            },
+            {
+                label: 'Trip Prep',
+                action: () => {
+                    addTranscriptLine('user', '"Set up the packing blocks too."');
+                    addChatMessage('user', 'Set up the packing blocks too.');
+                    [3, 4].forEach((id, i) => setTimeout(() => executeAction(id), i * 500));
+                    setTimeout(() => {
+                        setVoiceState('speaking');
+                        addTranscriptLine('agent', 'Added packing block Thursday evening and delegated kids packing to Vivianne on Friday.');
+                        addChatMessage('agent', 'Added your packing block Thursday evening and delegated kids packing to Vivianne on Friday.');
+                        setTimeout(() => setVoiceState('idle'), 3000);
+                    }, 1500);
+                },
+            },
+            {
+                label: 'Optimize',
+                action: () => {
+                    addTranscriptLine('user', '"Accept the rest."');
+                    addChatMessage('user', 'Accept the rest — and add the focus block.');
+                    [5, 6, 7, 8].forEach((id, i) => setTimeout(() => executeAction(id), i * 400));
+                    setTimeout(() => {
+                        setVoiceState('speaking');
+                        addTranscriptLine('agent', 'All 9 actions applied. Your week is optimized. Have a great trip!');
+                        addChatMessage('agent', 'All 9 actions applied. Kyle handles the prescription, airport transit is buffered, you have a 90-minute focus block Wednesday, and break buffers on Tuesday. Have a great trip!');
+                        setTimeout(() => setVoiceState('idle'), 4000);
+                    }, 3000);
+                },
+            },
+            {
+                label: 'Rate & Finish',
+                action: () => {
+                    rate(5);
+                    addTranscriptLine('system', 'Session complete — 9/9 actions applied, 5/5 alignment.');
+                    addChatMessage('agent', 'Session complete. All 9 recommendations applied with 5/5 alignment rating. Your calendar is optimized for the week ahead.');
+                },
+            },
+        ];
+
+        function advanceDemo() {
+            demoStep++;
+            if (demoStep >= demoSteps.length) {
+                document.getElementById('next-step-label').textContent = 'Demo Complete';
+                document.getElementById('btn-next-step').disabled = true;
+                document.getElementById('btn-next-step').classList.add('opacity-40');
+                return;
+            }
+
+            demoSteps[demoStep].action();
+            document.getElementById('step-counter').textContent = `Step ${demoStep + 1}/${demoSteps.length}`;
+            const nextIdx = demoStep + 1;
+            document.getElementById('next-step-label').textContent =
+                nextIdx < demoSteps.length ? demoSteps[nextIdx].label : 'Finish';
+        }
+
+        // Public API for Athena integration or standalone
+        window.AgentGridReport = {
+            loadRecommendations: (recs, config) => {
+                recommendations = recs;
+                if (config) Object.assign(gridReportConfig, config);
+                if (gridReportShown) {
+                    renderGridBody();
+                } else {
+                    renderGridReport();
+                }
+            },
+            onExecute: (callback) => { window._onExecuteCallback = callback; },
+            onRate: (callback) => { window._onRateCallback = callback; },
+        };
 
         // ══════════════════════════════════════════════════════
         // INITIALIZATION
@@ -710,7 +1087,7 @@
             switch(e.code) {
                 case 'Space':
                     e.preventDefault();
-                    toggleVoice();
+                    advanceDemo();
                     break;
                 case 'KeyP':
                     e.preventDefault();
