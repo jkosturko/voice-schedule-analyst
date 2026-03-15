@@ -2,7 +2,7 @@
 
 import asyncio
 import unittest
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import patch, MagicMock
 
 from schedule_analyst.live_agent import (
     handle_tool_call,
@@ -38,13 +38,12 @@ class TestSystemInstruction(unittest.TestCase):
 
     def test_brain_rules_loaded(self):
         """Brain rules should be loaded from the brain file."""
-        # The brain file exists in the repo, so BRAIN_RULES should be non-empty
         self.assertGreater(len(BRAIN_RULES), 0)
 
     def test_brain_rules_in_instruction(self):
         """Brain rules should be embedded in the system instruction."""
-        # At minimum, the brain file content should appear in the instruction
-        self.assertIn("PROTECTED", SYSTEM_INSTRUCTION)
+        # Brain file uses "protected" (lowercase) in rule text
+        self.assertIn("protected", SYSTEM_INSTRUCTION.lower())
 
     def test_no_raw_json_instruction(self):
         """System instruction should tell agent not to output JSON."""
@@ -56,7 +55,7 @@ class TestSystemInstruction(unittest.TestCase):
 
 
 class TestHandleToolCall(unittest.TestCase):
-    """Test tool call handler."""
+    """Test tool call handler — patches TOOL_FUNCTIONS dict directly."""
 
     def _make_fc(self, name, args=None):
         fc = MagicMock()
@@ -70,41 +69,41 @@ class TestHandleToolCall(unittest.TestCase):
         self.assertIn("error", result)
         self.assertIn("Unknown tool", result["error"])
 
-    @patch("schedule_analyst.live_agent.get_calendar_events")
-    def test_get_calendar_events_called(self, mock_fn):
-        mock_fn.return_value = {"events": [], "count": 0}
-        fc = self._make_fc("get_calendar_events", {"time_range": "today"})
-        result = asyncio.run(handle_tool_call(fc))
-        mock_fn.assert_called_once_with(time_range="today")
-        self.assertEqual(result["count"], 0)
+    def test_get_calendar_events_called(self):
+        mock_fn = MagicMock(return_value={"events": [], "count": 0})
+        with patch.dict(TOOL_FUNCTIONS, {"get_calendar_events": mock_fn}):
+            fc = self._make_fc("get_calendar_events", {"time_range": "today"})
+            result = asyncio.run(handle_tool_call(fc))
+            mock_fn.assert_called_once_with(time_range="today")
+            self.assertEqual(result["count"], 0)
 
-    @patch("schedule_analyst.live_agent.find_conflicts")
-    def test_find_conflicts_called(self, mock_fn):
-        mock_fn.return_value = {"conflicts": [], "conflict_count": 0}
-        fc = self._make_fc("find_conflicts", {"time_range": "this week"})
-        result = asyncio.run(handle_tool_call(fc))
-        mock_fn.assert_called_once_with(time_range="this week")
+    def test_find_conflicts_called(self):
+        mock_fn = MagicMock(return_value={"conflicts": [], "conflict_count": 0})
+        with patch.dict(TOOL_FUNCTIONS, {"find_conflicts": mock_fn}):
+            fc = self._make_fc("find_conflicts", {"time_range": "this week"})
+            result = asyncio.run(handle_tool_call(fc))
+            mock_fn.assert_called_once_with(time_range="this week")
 
-    @patch("schedule_analyst.live_agent.suggest_optimizations")
-    def test_suggest_optimizations_called(self, mock_fn):
-        mock_fn.return_value = {"suggestions": [], "suggestion_count": 0}
-        fc = self._make_fc("suggest_optimizations", {"focus": "deep work"})
-        result = asyncio.run(handle_tool_call(fc))
-        mock_fn.assert_called_once_with(focus="deep work")
+    def test_suggest_optimizations_called(self):
+        mock_fn = MagicMock(return_value={"suggestions": [], "suggestion_count": 0})
+        with patch.dict(TOOL_FUNCTIONS, {"suggest_optimizations": mock_fn}):
+            fc = self._make_fc("suggest_optimizations", {"focus": "deep work"})
+            result = asyncio.run(handle_tool_call(fc))
+            mock_fn.assert_called_once_with(focus="deep work")
 
-    @patch("schedule_analyst.live_agent.get_calendar_events")
-    def test_tool_exception_returns_error(self, mock_fn):
-        mock_fn.side_effect = RuntimeError("Calendar API down")
-        fc = self._make_fc("get_calendar_events", {"time_range": "today"})
-        result = asyncio.run(handle_tool_call(fc))
-        self.assertIn("error", result)
-        self.assertIn("Calendar API down", result["error"])
+    def test_tool_exception_returns_error(self):
+        mock_fn = MagicMock(side_effect=RuntimeError("Calendar API down"))
+        with patch.dict(TOOL_FUNCTIONS, {"get_calendar_events": mock_fn}):
+            fc = self._make_fc("get_calendar_events", {"time_range": "today"})
+            result = asyncio.run(handle_tool_call(fc))
+            self.assertIn("error", result)
+            self.assertIn("Calendar API down", result["error"])
 
     def test_empty_args_handled(self):
         """Tool call with no args should not crash."""
-        fc = self._make_fc("get_calendar_events", None)
-        with patch("schedule_analyst.live_agent.get_calendar_events") as mock_fn:
-            mock_fn.return_value = {"events": [], "count": 0}
+        mock_fn = MagicMock(return_value={"events": [], "count": 0})
+        with patch.dict(TOOL_FUNCTIONS, {"get_calendar_events": mock_fn}):
+            fc = self._make_fc("get_calendar_events", None)
             result = asyncio.run(handle_tool_call(fc))
             mock_fn.assert_called_once_with()
 
@@ -139,6 +138,18 @@ class TestCheckApiKey(unittest.TestCase):
         from schedule_analyst.live_agent import _check_api_key
         with self.assertRaises(SystemExit):
             _check_api_key()
+
+
+class TestMainEntryPoint(unittest.TestCase):
+    """Test CLI mode selection."""
+
+    def test_modes_mapping(self):
+        """All three modes should be available."""
+        from schedule_analyst.live_agent import run_voice_agent, run_text_agent, run_demo_agent
+        # Just verify they're callable
+        self.assertTrue(callable(run_voice_agent))
+        self.assertTrue(callable(run_text_agent))
+        self.assertTrue(callable(run_demo_agent))
 
 
 if __name__ == "__main__":
