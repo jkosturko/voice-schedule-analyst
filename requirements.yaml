@@ -72,7 +72,7 @@ requirements:
     status: "Completed"
     priority: "MVP"
     eval_driven: true
-    tech:
+    technology_stack:
       - "google-gemini/live-api-web-console → src/lib/audio-recorder.ts (16kHz mic capture)"
       - "google-gemini/live-api-web-console → src/lib/worklets/vol-meter.ts (volume metering)"
       - "google-gemini/live-api-web-console → src/hooks/use-live-api.ts (connection hook)"
@@ -102,7 +102,7 @@ requirements:
     status: "Completed"
     priority: "MVP"
     eval_driven: true
-    tech:
+    technology_stack:
       - "google-gemini/live-api-web-console → src/lib/audio-streamer.ts (24kHz playback)"
       - "google-gemini/live-api-web-console → src/lib/genai-live-client.ts (WebSocket client)"
       - "Model: gemini-2.5-flash-native-audio-latest (native audio, no TTS)"
@@ -130,7 +130,7 @@ requirements:
     status: "In Progress"
     priority: "MVP"
     eval_driven: true
-    tech:
+    technology_stack:
       - "google-gemini/live-api-web-console → genai-live-client.ts emits 'interrupted' event"
       - "gemini-2.5-flash-native-audio-latest handles barge-in natively"
     description: |
@@ -158,7 +158,7 @@ requirements:
     status: "Completed"
     priority: "MVP"
     eval_driven: true
-    tech:
+    technology_stack:
       - "Google Calendar API v3 (googleapis python client)"
       - "OAuth: Desktop App flow → token.json with refresh"
       - "ADK tool: get_calendar_events (already built)"
@@ -296,7 +296,7 @@ requirements:
     status: "Completed"
     priority: "MVP"
     eval_driven: false
-    tech:
+    technology_stack:
       - "Vanilla JS/HTML (portable — no React dependency for standalone)"
       - "Tailwind CDN for styling (obsidian palette)"
       - "Data-driven: renders from recommendations[] + CATEGORY_CONFIG"
@@ -353,7 +353,7 @@ requirements:
     status: "Completed"
     priority: "MVP"
     eval_driven: false
-    tech:
+    technology_stack:
       - "Orb: custom CSS animations (already built in static/index.html)"
       - "Alternative: github.com/tarenberg/VoiceChat → VoiceOrb.tsx (200 lines, 4 states)"
       - "Volume: wire audioLevel from google-gemini/live-api-web-console vol-meter worklet"
@@ -382,7 +382,7 @@ requirements:
     status: "Completed"
     priority: "MVP"
     eval_driven: false
-    tech:
+    technology_stack:
       - "Adapt: google-gemini/live-api-web-console → src/components/logger/Logger.tsx"
       - "Strip dev formatting, add role colors (user=blue, agent=teal)"
       - "Or build simple: scrollable div, append entries from voice events"
@@ -474,7 +474,7 @@ requirements:
     status: "Not Started"
     priority: "MVP"
     eval_driven: true
-    tech:
+    technology_stack:
       - "google-gemini/live-api-web-console → genai-live-client.ts emits 'interrupted' event"
       - "CSS: barge-in-flash animation (already in prototype)"
     description: |
@@ -619,6 +619,36 @@ requirements:
       tested: false
       test_count: 0
 
+  - id: ui-015
+    name: "Responsive / mobile layout"
+    status: "Not Started"
+    priority: "Nice to Have"
+    eval_driven: false
+    technology_stack:
+      - "Tailwind responsive classes (sm:, md:, lg:)"
+      - "Stack panels vertically on mobile (grid → single column)"
+      - "Voice orb remains accessible at bottom on all screen sizes"
+    description: |
+      UI adapts to mobile screen sizes. Grid stacks vertically,
+      right panel collapses below main content, voice bar stays
+      fixed at bottom. Enables voice interaction from phone —
+      the most natural voice-first use case.
+    acceptance_criteria:
+      - "UI is usable on mobile viewport (375px width)"
+      - "Grid rows readable without horizontal scroll"
+      - "Voice orb clickable and functional on mobile"
+      - "Transcript visible (below grid or in expandable panel)"
+    test_steps:
+      - "Open UI in Chrome, toggle device toolbar (Ctrl+Shift+M)"
+      - "Set viewport to 375x812 (iPhone)"
+      - "Assert: grid renders without horizontal scroll"
+      - "Assert: voice orb visible and clickable"
+      - "Assert: no overlapping elements"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
   # ═══ DEPLOYMENT ═══
 
   - id: deploy-001
@@ -626,7 +656,7 @@ requirements:
     status: "Completed"
     priority: "MVP"
     eval_driven: false
-    tech:
+    technology_stack:
       - "Google Cloud Run"
       - "Dockerfile (already built)"
       - "gcloud builds submit + gcloud run deploy"
