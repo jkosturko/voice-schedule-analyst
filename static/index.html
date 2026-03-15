@@ -297,12 +297,9 @@
                         </div>
                     </div>
 
-                    <!-- Demo Stepper -->
-                    <div class="flex items-center gap-2 mr-2" id="demo-stepper">
-                        <button id="btn-next-step" onclick="advanceDemo()" class="h-10 px-5 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center gap-2 text-blue-400 hover:bg-blue-500 hover:text-black transition-all text-[10px] font-black uppercase tracking-widest">
-                            <i data-lucide="play" class="w-3.5 h-3.5"></i> <span id="next-step-label">Start Demo</span>
-                        </button>
-                        <div class="text-[8px] font-mono text-slate-600 uppercase w-16 text-center" id="step-counter">Step 0/5</div>
+                    <!-- Live Status -->
+                    <div class="flex items-center gap-2 mr-2" id="live-status">
+                        <div class="text-[9px] font-mono text-slate-500 uppercase tracking-widest" id="grid-status">Loading calendar...</div>
                     </div>
 
                     <!-- Divider -->
@@ -395,12 +392,230 @@
         // ══════════════════════════════════════════════════════
         const API_BASE = window.location.origin; // Same origin (Flask serves this)
         const ADK_BASE = 'http://localhost:8000'; // ADK web server (local dev)
+        const ADK_WS_BASE = ADK_BASE.replace('http', 'ws');
+        const ADK_APP = 'schedule_analyst';
+        const ADK_USER = 'web-user';
+        const SEND_SAMPLE_RATE = 16000;
+        const RECEIVE_SAMPLE_RATE = 24000;
+
         let sessionId = null;
         let voiceState = 'idle';
         let micMuted = false;
         let isPaused = false;
         let sessionSeconds = 0;
         let stateBeforePause = 'idle';
+
+        // ── Live Audio State ──
+        let liveSocket = null;
+        let mediaStream = null;
+        let audioContext = null;
+        let micProcessor = null;
+        let playbackContext = null;
+        let playbackQueue = [];
+        let isPlaying = false;
+        let pendingAgentText = '';
+
+        // ══════════════════════════════════════════════════════
+        // GEMINI LIVE — ADK WebSocket Voice Pipeline
+        // ══════════════════════════════════════════════════════
+
+        async function createAdkSession() {
+            const res = await fetch(`${ADK_BASE}/apps/${ADK_APP}/users/${ADK_USER}/sessions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+            const data = await res.json();
+            sessionId = data.id;
+            console.log('[LIVE] Session created:', sessionId);
+            return sessionId;
+        }
+
+        async function startLiveSession() {
+            try {
+                if (!sessionId) await createAdkSession();
+
+                const wsUrl = `${ADK_WS_BASE}/run_live?app_name=${ADK_APP}&user_id=${ADK_USER}&session_id=${sessionId}&modalities=AUDIO`;
+                liveSocket = new WebSocket(wsUrl);
+
+                liveSocket.onopen = () => {
+                    console.log('[LIVE] WebSocket connected');
+                    addTranscriptLine('system', 'Connected to Gemini Live');
+                    startMicCapture();
+                };
+
+                liveSocket.onmessage = (event) => {
+                    handleLiveEvent(JSON.parse(event.data));
+                };
+
+                liveSocket.onerror = (err) => {
+                    console.error('[LIVE] WebSocket error:', err);
+                    addTranscriptLine('system', 'Connection error');
+                    stopLiveSession();
+                };
+
+                liveSocket.onclose = (event) => {
+                    console.log('[LIVE] WebSocket closed:', event.code, event.reason);
+                    if (voiceState !== 'idle') {
+                        setVoiceState('idle');
+                        addTranscriptLine('system', 'Session disconnected');
+                    }
+                };
+            } catch (e) {
+                console.error('[LIVE] Failed to start:', e);
+                addTranscriptLine('system', 'Failed to connect: ' + e.message);
+                setVoiceState('idle');
+            }
+        }
+
+        function stopLiveSession() {
+            if (micProcessor) { micProcessor.disconnect(); micProcessor = null; }
+            if (audioContext) { audioContext.close(); audioContext = null; }
+            if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+            if (liveSocket && liveSocket.readyState === WebSocket.OPEN) {
+                liveSocket.send(JSON.stringify({ close: true }));
+                liveSocket.close();
+            }
+            liveSocket = null;
+            playbackQueue = [];
+            isPlaying = false;
+        }
+
+        async function startMicCapture() {
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: { sampleRate: { ideal: 48000 }, channelCount: 1, echoCancellation: true, noiseSuppression: true }
+                });
+                audioContext = new AudioContext({ sampleRate: 48000 });
+                const source = audioContext.createMediaStreamSource(mediaStream);
+
+                const bufferSize = 4096;
+                micProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+
+                micProcessor.onaudioprocess = (event) => {
+                    if (micMuted || isPaused || !liveSocket || liveSocket.readyState !== WebSocket.OPEN) return;
+
+                    const input = event.inputBuffer.getChannelData(0);
+                    const ratio = audioContext.sampleRate / SEND_SAMPLE_RATE;
+                    const outputLen = Math.floor(input.length / ratio);
+                    const pcm16 = new Int16Array(outputLen);
+
+                    for (let i = 0; i < outputLen; i++) {
+                        const srcIdx = Math.floor(i * ratio);
+                        const sample = Math.max(-1, Math.min(1, input[srcIdx]));
+                        pcm16[i] = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+                    }
+
+                    const b64 = arrayBufferToBase64(pcm16.buffer);
+                    liveSocket.send(JSON.stringify({
+                        blob: { data: b64, mime_type: `audio/pcm;rate=${SEND_SAMPLE_RATE}` }
+                    }));
+                };
+
+                source.connect(micProcessor);
+                micProcessor.connect(audioContext.destination);
+                console.log('[LIVE] Mic capture started at', audioContext.sampleRate, 'Hz');
+            } catch (e) {
+                console.error('[LIVE] Mic error:', e);
+                addTranscriptLine('system', 'Microphone error: ' + e.message);
+                setVoiceState('idle');
+            }
+        }
+
+        function handleLiveEvent(event) {
+            // Audio + text from model turn
+            if (event.content?.parts) {
+                for (const part of event.content.parts) {
+                    if (part.text) pendingAgentText += part.text;
+                    if (part.inline_data?.data) {
+                        if (voiceState !== 'speaking') setVoiceState('speaking');
+                        enqueueAudio(part.inline_data.data);
+                    }
+                }
+            }
+
+            // Alternative format: server_content.model_turn
+            if (event.server_content?.model_turn?.parts) {
+                for (const part of event.server_content.model_turn.parts) {
+                    if (part.text) pendingAgentText += part.text;
+                    if (part.inline_data?.data) {
+                        if (voiceState !== 'speaking') setVoiceState('speaking');
+                        enqueueAudio(part.inline_data.data);
+                    }
+                }
+            }
+
+            // Turn complete
+            if (event.turn_complete || event.server_content?.turn_complete) {
+                if (pendingAgentText.trim()) {
+                    addChatMessage('agent', pendingAgentText.trim());
+                    addTranscriptLine('agent', pendingAgentText.trim());
+                }
+                pendingAgentText = '';
+                if (!isPlaying) setVoiceState('listening');
+            }
+
+            // Tool calls — show thinking state
+            if (event.actions || event.tool_call) {
+                setVoiceState('thinking');
+                const calls = event.tool_call?.function_calls || [];
+                for (const fc of calls) {
+                    addTranscriptLine('system', `Calling ${fc.name}...`);
+                }
+            }
+
+            // Interrupted
+            if (event.interrupted) {
+                playbackQueue = [];
+                isPlaying = false;
+                setVoiceState('listening');
+                addTranscriptLine('system', 'Interrupted');
+            }
+        }
+
+        function enqueueAudio(base64Data) {
+            const bytes = base64ToArrayBuffer(base64Data);
+            playbackQueue.push(bytes);
+            if (!isPlaying) playNextChunk();
+        }
+
+        function playNextChunk() {
+            if (playbackQueue.length === 0) {
+                isPlaying = false;
+                if (voiceState === 'speaking') setVoiceState('listening');
+                return;
+            }
+            isPlaying = true;
+            if (!playbackContext) playbackContext = new AudioContext({ sampleRate: RECEIVE_SAMPLE_RATE });
+
+            const pcmBytes = playbackQueue.shift();
+            const int16 = new Int16Array(pcmBytes);
+            const float32 = new Float32Array(int16.length);
+            for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768.0;
+
+            const buffer = playbackContext.createBuffer(1, float32.length, RECEIVE_SAMPLE_RATE);
+            buffer.getChannelData(0).set(float32);
+
+            const src = playbackContext.createBufferSource();
+            src.buffer = buffer;
+            src.connect(playbackContext.destination);
+            src.onended = () => playNextChunk();
+            src.start();
+        }
+
+        function arrayBufferToBase64(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+            return btoa(binary);
+        }
+
+        function base64ToArrayBuffer(base64) {
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            return bytes.buffer;
+        }
 
         // ══════════════════════════════════════════════════════
         // REUSABLE GRID REPORT ENGINE
@@ -414,18 +629,8 @@
             optimizations: { label: 'Optimizations', icon: 'sparkles',       cssClass: 'optimizations' },
         };
 
-        // Recommendations data — in production, comes from ADK agent dispatch result
-        let recommendations = [
-            { id: 0, category: 'conflicts', date: 'Sun Mar 15', title: 'Triple-booked 10 AM slot', description: 'Delete 2x duplicate meetings, keep team standup.', rule_ref: 'R-01', status: 'pending' },
-            { id: 1, category: 'conflicts', date: 'Sun Mar 15', title: 'Overlapping school pickup', description: 'Move pickup calendar to Vivianne — she confirmed Fridays.', rule_ref: 'R-02', status: 'pending' },
-            { id: 2, category: 'conflicts', date: 'Mon Mar 16', title: 'Team sync vs. client call', description: 'Reschedule team sync to 2 PM. Client call is immovable.', rule_ref: 'R-05', status: 'pending' },
-            { id: 3, category: 'trip_prep', date: 'Thu Mar 19', title: 'Packing block missing', description: 'Add "Jessica: lay out clothes for trip" at 7:00 PM.', rule_ref: 'R-03', status: 'pending' },
-            { id: 4, category: 'trip_prep', date: 'Fri Mar 20', title: 'Kids packing delegation', description: 'Rename Friday block to "Vivianne packs kids". Delegate per your rules.', rule_ref: 'R-02', status: 'pending' },
-            { id: 5, category: 'optimizations', date: 'Mon Mar 16', title: 'Prescription pickup timing', description: 'Move to Thursday pre-trip. Rename: "Kyle picks up Rx".', rule_ref: 'R-04', status: 'pending' },
-            { id: 6, category: 'optimizations', date: 'Sat Mar 15', title: 'Airport transit block', description: 'Add "Travel to Airport" at 2:00 PM with 45min buffer.', rule_ref: 'R-11', status: 'pending' },
-            { id: 7, category: 'optimizations', date: 'Wed Mar 18', title: 'Focus time deficit', description: 'Insert 90-min deep work block at 1:30 PM. You have zero protected focus time Wed.', rule_ref: 'R-07', status: 'pending' },
-            { id: 8, category: 'optimizations', date: 'All Week', title: 'Meeting fatigue warning', description: 'Tue has 6h consecutive meetings. Add 15-min buffer breaks between blocks.', rule_ref: 'R-12', status: 'pending' },
-        ];
+        // Recommendations data — populated from /schedule-analyst/analyze API
+        let recommendations = [];
 
         let gridReportConfig = {
             summary: 'Found <span class="text-rose-400 font-bold">3 conflicts</span>, <span class="text-amber-400 font-bold">2 trip prep</span> gaps, <span class="text-teal-400 font-bold">4 optimization</span> opportunities across your week.',
@@ -571,18 +776,39 @@
             }
         }
 
-        function executeAction(id, callback) {
+        async function executeAction(id, callback) {
             const rec = recommendations.find(r => r.id === id);
             if (!rec || rec.status !== 'pending') { if (callback) callback(); return; }
 
             rec.status = 'running';
             renderGridBody();
 
-            setTimeout(() => {
-                rec.status = 'applied';
-                renderGridBody();
-                if (callback) callback();
-            }, 600 + Math.random() * 400);
+            try {
+                const instruction = `Execute this calendar action: ${rec.title}. Details: ${rec.description}`;
+                const res = await fetch(`${API_BASE}/schedule-analyst/question`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: instruction })
+                });
+                const data = await res.json();
+
+                if (data.error) {
+                    console.error(`[ACTION] Failed for rec ${id}:`, data.error);
+                    rec.status = 'failed';
+                    addTranscriptLine('system', `Failed: ${rec.title} — ${data.error}`);
+                } else {
+                    rec.status = 'applied';
+                    addTranscriptLine('agent', `Applied: ${rec.title}`);
+                    if (data.answer) addChatMessage('agent', data.answer);
+                }
+            } catch (e) {
+                console.error(`[ACTION] Error for rec ${id}:`, e);
+                rec.status = 'failed';
+                addTranscriptLine('system', `Error: ${rec.title}`);
+            }
+
+            renderGridBody();
+            if (callback) callback();
         }
 
         function acceptAll() {
@@ -605,93 +831,110 @@
         }
 
         // ══════════════════════════════════════════════════════
-        // DEMO FLOW
+        // LIVE ANALYSIS — loads real data on page load
         // ══════════════════════════════════════════════════════
-        let demoStep = -1;
-        const demoSteps = [
-            {
-                label: 'Jessica Speaks',
-                action: () => {
-                    setVoiceState('listening');
-                    addTranscriptLine('user', '"What does my week look like? I\'m flying to Cabo on Saturday."');
-                    addChatMessage('user', 'What does my week look like? I\'m flying to Cabo on Saturday.');
-                    setTimeout(() => {
-                        setVoiceState('thinking');
-                        setTimeout(() => {
-                            setVoiceState('speaking');
-                            addTranscriptLine('agent', 'Your week is packed. I found 3 conflicts — the worst is a triple-booked 10 AM slot. You also have no packing time before your trip. I\'ve prepared 9 recommendations.');
-                            renderGridReport();
-                            setTimeout(() => setVoiceState('idle'), 4000);
-                        }, 2000);
-                    }, 3000);
-                },
-            },
-            {
-                label: 'Accept Conflicts',
-                action: () => {
-                    addTranscriptLine('user', '"Accept all the conflict fixes."');
-                    addChatMessage('user', 'Accept all the conflict fixes.');
-                    [0, 1, 2].forEach((id, i) => setTimeout(() => executeAction(id), i * 500));
-                    setTimeout(() => {
-                        setVoiceState('speaking');
-                        addTranscriptLine('agent', 'Done — deleted the duplicates, moved pickup to Vivianne, and rescheduled team sync to 2 PM.');
-                        addChatMessage('agent', 'Done — deleted the duplicates, moved the school pickup to Vivianne, and rescheduled team sync to 2 PM.');
-                        setTimeout(() => setVoiceState('idle'), 3000);
-                    }, 2500);
-                },
-            },
-            {
-                label: 'Trip Prep',
-                action: () => {
-                    addTranscriptLine('user', '"Set up the packing blocks too."');
-                    addChatMessage('user', 'Set up the packing blocks too.');
-                    [3, 4].forEach((id, i) => setTimeout(() => executeAction(id), i * 500));
-                    setTimeout(() => {
-                        setVoiceState('speaking');
-                        addTranscriptLine('agent', 'Added packing block Thursday evening and delegated kids packing to Vivianne on Friday.');
-                        addChatMessage('agent', 'Added your packing block Thursday evening and delegated kids packing to Vivianne on Friday.');
-                        setTimeout(() => setVoiceState('idle'), 3000);
-                    }, 1500);
-                },
-            },
-            {
-                label: 'Optimize',
-                action: () => {
-                    addTranscriptLine('user', '"Accept the rest."');
-                    addChatMessage('user', 'Accept the rest — and add the focus block.');
-                    [5, 6, 7, 8].forEach((id, i) => setTimeout(() => executeAction(id), i * 400));
-                    setTimeout(() => {
-                        setVoiceState('speaking');
-                        addTranscriptLine('agent', 'All 9 actions applied. Your week is optimized. Have a great trip!');
-                        addChatMessage('agent', 'All 9 actions applied. Kyle handles the prescription, airport transit is buffered, you have a 90-minute focus block Wednesday, and break buffers on Tuesday. Have a great trip!');
-                        setTimeout(() => setVoiceState('idle'), 4000);
-                    }, 3000);
-                },
-            },
-            {
-                label: 'Rate & Finish',
-                action: () => {
-                    rate(5);
-                    addTranscriptLine('system', 'Session complete — 9/9 actions applied, 5/5 alignment.');
-                    addChatMessage('agent', 'Session complete. All 9 recommendations applied with 5/5 alignment rating. Your calendar is optimized for the week ahead.');
-                },
-            },
-        ];
+        async function loadLiveAnalysis() {
+            const statusEl = document.getElementById('grid-status');
+            statusEl.textContent = 'Analyzing calendar...';
+            setVoiceState('thinking');
+            addTranscriptLine('system', 'Analyzing your calendar...');
 
-        function advanceDemo() {
-            demoStep++;
-            if (demoStep >= demoSteps.length) {
-                document.getElementById('next-step-label').textContent = 'Demo Complete';
-                document.getElementById('btn-next-step').disabled = true;
-                document.getElementById('btn-next-step').classList.add('opacity-40');
-                return;
+            try {
+                const res = await fetch(`${API_BASE}/schedule-analyst/analyze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ time_range: 'next 7 days' })
+                });
+                const data = await res.json();
+
+                if (data.error) {
+                    statusEl.textContent = 'Analysis failed';
+                    setVoiceState('idle');
+                    addChatMessage('agent', `Error analyzing calendar: ${data.error}`);
+                    return;
+                }
+
+                // Build recommendations from real data
+                recommendations = [];
+                let recId = 0;
+
+                // Conflicts → recommendations
+                if (data.conflicts && data.conflicts.length > 0) {
+                    data.conflicts.forEach(c => {
+                        recommendations.push({
+                            id: recId++,
+                            category: 'conflicts',
+                            date: c.date || c.day || '',
+                            title: `${c.event1} vs ${c.event2}`,
+                            description: `${c.overlap_minutes || '?'}min overlap — resolve by moving or cancelling one.`,
+                            rule_ref: 'R-01',
+                            status: 'pending',
+                        });
+                    });
+                }
+
+                // Back-to-back warnings → optimizations
+                if (data.back_to_back && data.back_to_back.length > 0) {
+                    data.back_to_back.forEach(b => {
+                        recommendations.push({
+                            id: recId++,
+                            category: 'optimizations',
+                            date: b.date || '',
+                            title: 'Back-to-back meeting block',
+                            description: b.warning || b.description || 'Add buffer between consecutive meetings.',
+                            rule_ref: 'R-12',
+                            status: 'pending',
+                        });
+                    });
+                }
+
+                // Dead time gaps → optimizations
+                if (data.dead_time && data.dead_time.length > 0) {
+                    data.dead_time.forEach(d => {
+                        recommendations.push({
+                            id: recId++,
+                            category: 'optimizations',
+                            date: d.date || '',
+                            title: 'Dead time gap',
+                            description: d.description || d.gap || 'Short gap that could be used for a break or focus block.',
+                            rule_ref: 'R-07',
+                            status: 'pending',
+                        });
+                    });
+                }
+
+                // Update summary config
+                const conflictCount = data.conflicts?.length || 0;
+                const b2bCount = data.back_to_back?.length || 0;
+                const deadCount = data.dead_time?.length || 0;
+                const totalRecs = recommendations.length;
+
+                gridReportConfig.summary = `Found <span class="text-rose-400 font-bold">${conflictCount} conflict${conflictCount !== 1 ? 's' : ''}</span>, ` +
+                    `<span class="text-amber-400 font-bold">${b2bCount} back-to-back warning${b2bCount !== 1 ? 's' : ''}</span>, ` +
+                    `<span class="text-teal-400 font-bold">${deadCount} gap${deadCount !== 1 ? 's' : ''}</span> ` +
+                    `across ${data.event_count || 0} events.`;
+
+                // Show summary in chat
+                const summary = data.summary || `Found ${data.event_count} events with ${conflictCount} conflicts.`;
+                addChatMessage('agent', summary);
+                addTranscriptLine('agent', summary);
+
+                // Render grid if we have recommendations
+                if (totalRecs > 0) {
+                    renderGridReport();
+                    statusEl.textContent = `${totalRecs} recommendations`;
+                } else {
+                    statusEl.textContent = `${data.event_count || 0} events — no issues`;
+                    addChatMessage('agent', 'Your calendar looks clean — no conflicts or issues found.');
+                }
+
+                setVoiceState('idle');
+            } catch (e) {
+                console.error('[LIVE_ANALYSIS] Error:', e);
+                statusEl.textContent = 'Connection error';
+                setVoiceState('idle');
+                addChatMessage('agent', 'Failed to load calendar data. Check connection.');
             }
-
-            demoSteps[demoStep].action();
-            document.getElementById('step-counter').textContent = `Step ${demoStep + 1}/${demoSteps.length}`;
-            const nextIdx = demoStep + 1;
-            document.getElementById('next-step-label').textContent =
-                nextIdx < demoSteps.length ? demoSteps[nextIdx].label : 'Finish';
         }
 
         // Public API for Athena integration or standalone
@@ -716,6 +959,8 @@
             if (typeof lucide !== 'undefined') lucide.createIcons();
             await checkBackendHealth();
             startSessionTimer();
+            // Load live calendar analysis on page load
+            loadLiveAnalysis();
         });
 
         async function checkBackendHealth() {
@@ -847,9 +1092,10 @@
                 togglePause();
             } else if (voiceState === 'idle') {
                 setVoiceState('listening');
-                addTranscriptLine('system', 'Listening started — speak your question');
+                addTranscriptLine('system', 'Connecting to Gemini Live...');
+                startLiveSession();
             } else if (voiceState === 'listening') {
-                setVoiceState('idle');
+                stopLiveSession();
                 addTranscriptLine('system', 'Listening stopped');
             }
         }
@@ -863,30 +1109,59 @@
             if (!text) return;
             input.value = '';
 
-            // Add user message to chat and transcript
             addChatMessage('user', text);
             addTranscriptLine('user', text);
             setVoiceState('thinking');
 
             try {
-                // Use the Flask /schedule-analyst/question endpoint
-                const res = await fetch(`${API_BASE}/schedule-analyst/question`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question: text, time_range: 'next 7 days' })
-                });
-                const data = await res.json();
-
-                setVoiceState('speaking');
-                const answer = data.answer || data.error || 'No response received.';
-                addChatMessage('agent', answer);
-                addTranscriptLine('agent', answer);
-
-                // Show events count if available
-                if (data.event_count > 0) {
-                    addTranscriptLine('system', `${data.event_count} calendar events analyzed`);
+                // If live WebSocket is open, send as text content
+                if (liveSocket && liveSocket.readyState === WebSocket.OPEN) {
+                    liveSocket.send(JSON.stringify({
+                        content: { parts: [{ text: text }], role: 'user' }
+                    }));
+                    return; // Response handled by handleLiveEvent
                 }
 
+                // Fallback: use ADK SSE endpoint for text-only mode
+                if (!sessionId) await createAdkSession();
+
+                const res = await fetch(`${ADK_BASE}/run_sse`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        app_name: ADK_APP,
+                        user_id: ADK_USER,
+                        session_id: sessionId,
+                        new_message: { parts: [{ text: text }], role: 'user' }
+                    })
+                });
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let fullText = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value, { stream: true });
+                    // Parse SSE events
+                    for (const line of chunk.split('\n')) {
+                        if (!line.startsWith('data: ')) continue;
+                        try {
+                            const event = JSON.parse(line.slice(6));
+                            if (event.content?.parts) {
+                                for (const part of event.content.parts) {
+                                    if (part.text) fullText += part.text;
+                                }
+                            }
+                        } catch (e) { /* skip non-JSON lines */ }
+                    }
+                }
+
+                setVoiceState('speaking');
+                const answer = fullText.trim() || 'No response received.';
+                addChatMessage('agent', answer);
+                addTranscriptLine('agent', answer);
                 setTimeout(() => setVoiceState('idle'), 2000);
             } catch (e) {
                 console.error('[SEND] Error:', e);
@@ -1039,7 +1314,7 @@
             } else {
                 btn.classList.remove('bg-rose-500/20', 'border-rose-500/30', 'text-rose-400');
                 btn.classList.add('bg-white/5', 'border-white/10', 'text-slate-400');
-                setVoiceState('idle');
+                setVoiceState(liveSocket ? 'listening' : 'idle');
                 addTranscriptLine('system', 'Microphone unmuted');
             }
             if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -1067,13 +1342,18 @@
             const bar = document.getElementById('voice-bar');
             bar.classList.add('barge-in-flash');
             setTimeout(() => bar.classList.remove('barge-in-flash'), 300);
+            // Stop playback immediately
+            playbackQueue = [];
+            isPlaying = false;
             addTranscriptLine('system', 'Barge-in — interrupted');
             setVoiceState('listening');
         }
 
         function endSession() {
-            setVoiceState('idle');
+            stopLiveSession();
             sessionSeconds = 0;
+            sessionId = null;
+            setVoiceState('idle');
             addTranscriptLine('system', 'Session ended');
             addChatMessage('agent', 'Session ended. Click the orb or type below to start a new conversation.');
         }
@@ -1087,7 +1367,7 @@
             switch(e.code) {
                 case 'Space':
                     e.preventDefault();
-                    advanceDemo();
+                    toggleVoice();
                     break;
                 case 'KeyP':
                     e.preventDefault();
@@ -1099,7 +1379,7 @@
                     break;
                 case 'KeyA':
                     e.preventDefault();
-                    fetchAnalysis('next 7 days');
+                    loadLiveAnalysis();
                     break;
             }
         });
