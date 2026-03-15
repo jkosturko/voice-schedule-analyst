@@ -19,6 +19,26 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 
+@app.route("/", methods=["GET"])
+def index():
+    """Landing page — agent info and available endpoints."""
+    return jsonify({
+        "name": "Voice Schedule Analyst",
+        "description": "AI-powered voice schedule analysis using Gemini Live API + Google Calendar",
+        "endpoints": {
+            "GET /": "This page",
+            "GET /health": "Health check",
+            "GET /health/gemini": "Verify Gemini API connection",
+            "POST /schedule-analyst/analyze": "Analyze schedule for conflicts and patterns",
+            "POST /schedule-analyst/optimize": "Get optimization suggestions",
+            "POST /schedule-analyst/question": "Ask a question about your schedule",
+        },
+        "voice": "python -m schedule_analyst voice",
+        "text": "python -m schedule_analyst text",
+        "framework": "Google ADK + Gemini Live API",
+    })
+
+
 @app.route("/health", methods=["GET"])
 def health():
     """Health check endpoint for Cloud Run."""
