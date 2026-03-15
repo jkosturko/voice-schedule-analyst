@@ -224,19 +224,29 @@ requirements:
       notes: "suggest_optimizations tool functional in ADK web UI."
 
   - id: cal-004
-    name: "Update/move events"
+    name: "Update/move events (fuzzy matching)"
     status: "Completed"
     priority: "MVP"
     eval_driven: true
     description: |
       Agent can move events to new times via Google Calendar API.
+      MUST support fuzzy/natural language matching — user says a partial
+      or casual name, agent finds the right event. Users don't remember
+      exact event titles. "Move team bowling to next week" must match
+      "Team Bowling at Harry's". This is what makes voice interaction
+      feel natural vs. robotic.
     acceptance_criteria:
       - "update_event tool changes event start/end time in Google Calendar"
       - "Event persists in Google Calendar after update (verified via re-query)"
       - "Agent confirms the change in voice/text response"
+      - "Fuzzy match: partial name matches full event title (e.g., 'team bowling' matches 'Team Bowling at Harry\\'s')"
+      - "Fuzzy match: casual references work (e.g., 'the dentist thing' matches 'Dental Appointment')"
+      - "Fuzzy match: relative time works (e.g., 'move it to next week' resolves to correct date)"
+      - "Agent confirms which event it matched before executing (no silent wrong-event mutations)"
     test_steps:
-      - "Say: 'Move the sprint review to 2 PM'"
-      - "Assert: agent calls update_event tool"
+      - "Say: 'Move team bowling to next week' (when calendar has 'Team Bowling at Harry\\'s')"
+      - "Assert: agent identifies the correct event by fuzzy match"
+      - "Assert: agent confirms 'I found Team Bowling at Harry\\'s — moving to [date]. Correct?'"
       - "Assert: event is actually moved in Google Calendar"
       - "Say: 'What's on Thursday now?' — assert moved event shows at new time"
     implementation_status:
@@ -246,21 +256,23 @@ requirements:
       notes: "Verified ADK web UI: 'Move Morning Standup to 8:30 AM' → get_calendar_events + update_event → round-trip confirmed via Google Calendar MCP. All assertions PASS."
 
   - id: cal-005
-    name: "Delete events"
+    name: "Delete events (fuzzy matching)"
     status: "Completed"
     priority: "MVP"
     eval_driven: true
     description: |
       Agent can remove duplicate/unwanted events from Google Calendar.
+      Supports fuzzy matching — user doesn't need exact event title.
     acceptance_criteria:
       - "delete_event tool removes event from Google Calendar"
       - "Event no longer appears in calendar after deletion"
       - "Agent confirms deletion in voice/text response"
+      - "Fuzzy match: partial name finds correct event"
+      - "Agent confirms which event it will delete before executing"
     test_steps:
-      - "Say: 'Delete the duplicate meetings on Sunday'"
-      - "Assert: agent calls delete_event tool"
-      - "Assert: duplicate events are removed from Google Calendar"
-      - "Say: 'What's on Sunday now?' — assert duplicates gone"
+      - "Say: 'Delete the bowling thing' (when calendar has 'Team Bowling at Harry\\'s')"
+      - "Assert: agent identifies correct event and confirms before deleting"
+      - "Assert: event is removed from Google Calendar"
     implementation_status:
       implemented: true
       tested: true
