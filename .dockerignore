@@ -1,0 +1,17 @@
+.git
+.venv
+__pycache__
+*.pyc
+.env
+.env.local
+credentials.json
+token.json
+.pytest_cache
+*.egg-info
+dist
+build
+.gcloudignore
+.dockerignore
+.gitignore
+README.md
+tests/
