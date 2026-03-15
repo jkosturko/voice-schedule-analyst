@@ -94,7 +94,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --region "${REGION}" \
   --project "${PROJECT_ID}" \
   --allow-unauthenticated \
-  --set-env-vars "${ENV_VARS}" \
+  --update-env-vars "${ENV_VARS}" \
   --memory 512Mi \
   --cpu 1 \
   --min-instances 0 \
