@@ -297,7 +297,7 @@ async def run_voice_agent():
 
     try:
         async with client.aio.live.connect(
-            model="gemini-2.5-flash-native-audio",
+            model="gemini-2.5-flash-native-audio-latest",
             config=config,
         ) as session:
             print("✅ Connected!")
@@ -356,7 +356,7 @@ async def run_text_agent():
 
     try:
         async with client.aio.live.connect(
-            model="gemini-2.5-flash-native-audio",
+            model="gemini-2.5-flash-native-audio-latest",
             config=config,
         ) as session:
             print("✅ Connected! Type your schedule questions.")
@@ -431,7 +431,7 @@ async def run_demo_agent():
 
     try:
         async with client.aio.live.connect(
-            model="gemini-2.5-flash-native-audio",
+            model="gemini-2.5-flash-native-audio-latest",
             config=config,
         ) as session:
             print("✅ Connected! Running demo sequence...\n")
