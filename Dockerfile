@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY schedule_analyst/ ./schedule_analyst/
 COPY main.py .
 COPY brain/ ./brain/
+COPY static/ ./static/
 
 # Non-root user for security
 RUN useradd --create-home appuser

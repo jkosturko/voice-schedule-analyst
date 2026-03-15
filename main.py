@@ -8,7 +8,7 @@ import os
 import json
 import logging
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from google import genai
 
 from schedule_analyst.calendar_tools import get_calendar_events, find_conflicts
@@ -16,17 +16,25 @@ from schedule_analyst.calendar_tools import get_calendar_events, find_conflicts
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+app = Flask(__name__, static_folder=STATIC_DIR)
 
 
 @app.route("/", methods=["GET"])
 def index():
-    """Landing page — agent info and available endpoints."""
+    """Serve the Gemini Live UI."""
+    return send_from_directory(STATIC_DIR, "index.html")
+
+
+@app.route("/api", methods=["GET"])
+def api_index():
+    """API info — available endpoints."""
     return jsonify({
         "name": "Voice Schedule Analyst",
         "description": "AI-powered voice schedule analysis using Gemini Live API + Google Calendar",
         "endpoints": {
-            "GET /": "This page",
+            "GET /": "Interactive UI",
+            "GET /api": "This page",
             "GET /health": "Health check",
             "GET /health/gemini": "Verify Gemini API connection",
             "POST /schedule-analyst/analyze": "Analyze schedule for conflicts and patterns",

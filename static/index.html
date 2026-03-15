@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Athena | Gemini Live Calendar Agent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.344.0/dist/umd/lucide.min.js"></script>
+    <style>
+        :root {
+            --bg: #050505;
+            --panel: rgba(13, 17, 23, 0.85);
+            --accent-purple: #a855f7;
+            --accent-teal: #14b8a6;
+            --accent-blue: #3b82f6;
+            --accent-rose: #f43f5e;
+            --accent-amber: #f59e0b;
+            --accent-gemini: #4285f4;
+            --border: rgba(255, 255, 255, 0.05);
+        }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: #c9d1d9; overflow: hidden; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .glass-panel { background: var(--panel); backdrop-filter: blur(12px); border: 1px solid var(--border); }
+
+        /* ── Voice Orb ── */
+        .voice-orb-container { position: relative; width: 72px; height: 72px; }
+        .voice-orb {
+            width: 72px; height: 72px; border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #5b9dff, #4285f4 40%, #1a5cc7 80%);
+            box-shadow: 0 0 30px rgba(66, 133, 244, 0.3), inset 0 0 20px rgba(255, 255, 255, 0.1);
+            cursor: pointer; position: relative; z-index: 2; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .voice-orb.listening {
+            animation: orb-breathe 2s ease-in-out infinite;
+            box-shadow: 0 0 50px rgba(66, 133, 244, 0.5), 0 0 100px rgba(66, 133, 244, 0.2), inset 0 0 20px rgba(255, 255, 255, 0.15);
+        }
+        .voice-orb.thinking {
+            animation: orb-think 1.2s ease-in-out infinite;
+            background: radial-gradient(circle at 35% 35%, #c084fc, #a855f7 40%, #7c3aed 80%);
+            box-shadow: 0 0 50px rgba(168, 85, 247, 0.5), inset 0 0 20px rgba(255, 255, 255, 0.15);
+        }
+        .voice-orb.speaking {
+            animation: orb-speak 0.6s ease-in-out infinite alternate;
+            background: radial-gradient(circle at 35% 35%, #34d399, #14b8a6 40%, #0d9488 80%);
+            box-shadow: 0 0 60px rgba(20, 184, 166, 0.5), inset 0 0 20px rgba(255, 255, 255, 0.15);
+        }
+        .voice-orb.paused {
+            opacity: 0.4;
+            box-shadow: 0 0 10px rgba(66, 133, 244, 0.1);
+            animation: none;
+        }
+
+        @keyframes orb-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+        @keyframes orb-think { 0%, 100% { transform: scale(1) rotate(0deg); } 25% { transform: scale(1.05) rotate(2deg); } 75% { transform: scale(0.97) rotate(-2deg); } }
+        @keyframes orb-speak { 0% { transform: scale(1); } 100% { transform: scale(1.06); } }
+
+        /* ── Ripple Rings ── */
+        .orb-ring {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            border-radius: 50%; border: 1px solid rgba(66, 133, 244, 0.3);
+            pointer-events: none; opacity: 0;
+        }
+        .orb-ring.active { animation: ring-pulse 2s ease-out infinite; }
+        .orb-ring:nth-child(2) { animation-delay: 0.4s; }
+        .orb-ring:nth-child(3) { animation-delay: 0.8s; }
+        @keyframes ring-pulse { 0% { width: 72px; height: 72px; opacity: 0.6; } 100% { width: 160px; height: 160px; opacity: 0; } }
+
+        /* ── Waveform ── */
+        .waveform { display: flex; align-items: center; gap: 2px; height: 24px; }
+        .wave-bar {
+            width: 3px; border-radius: 2px; background: var(--accent-gemini);
+            transition: height 0.1s; height: 4px;
+        }
+        .waveform.active .wave-bar { animation: wave-dance 0.5s ease-in-out infinite alternate; }
+        .wave-bar:nth-child(1) { animation-delay: 0s; }
+        .wave-bar:nth-child(2) { animation-delay: 0.1s; }
+        .wave-bar:nth-child(3) { animation-delay: 0.15s; }
+        .wave-bar:nth-child(4) { animation-delay: 0.2s; }
+        .wave-bar:nth-child(5) { animation-delay: 0.25s; }
+        .wave-bar:nth-child(6) { animation-delay: 0.05s; }
+        .wave-bar:nth-child(7) { animation-delay: 0.18s; }
+        .wave-bar:nth-child(8) { animation-delay: 0.12s; }
+        @keyframes wave-dance { 0% { height: 4px; } 100% { height: 22px; } }
+
+        /* ── Thought Bubbles ── */
+        .thought-dots { display: flex; gap: 6px; align-items: center; }
+        .thought-dot {
+            width: 8px; height: 8px; border-radius: 50%; background: rgba(168, 85, 247, 0.6);
+            animation: thought-bounce 1.4s ease-in-out infinite;
+        }
+        .thought-dot:nth-child(2) { animation-delay: 0.2s; }
+        .thought-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes thought-bounce { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+
+        /* ── Transcript ── */
+        .transcript-line { padding: 8px 12px; border-radius: 8px; transition: all 0.3s; }
+        .transcript-line.user-line { background: rgba(66, 133, 244, 0.05); border-left: 2px solid var(--accent-gemini); }
+        .transcript-line.agent-line { background: rgba(20, 184, 166, 0.05); border-left: 2px solid var(--accent-teal); }
+        .transcript-line.system-line { background: rgba(255, 255, 255, 0.02); border-left: 2px solid rgba(255, 255, 255, 0.1); }
+
+        /* ── Message Animation ── */
+        .message-anim { animation: message-pop 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+        @keyframes message-pop { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ── Phase Badge ── */
+        .phase-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 4px 12px; border-radius: 20px; font-size: 9px; font-weight: 800;
+            text-transform: uppercase; letter-spacing: 0.15em;
+        }
+        .phase-report { background: rgba(66, 133, 244, 0.1); color: #60a5fa; border: 1px solid rgba(66, 133, 244, 0.2); }
+        .phase-conversation { background: rgba(20, 184, 166, 0.1); color: #5eead4; border: 1px solid rgba(20, 184, 166, 0.2); }
+
+        /* ── Barge-in Flash ── */
+        .barge-in-flash { animation: barge-flash 0.3s ease-out; }
+        @keyframes barge-flash { 0% { background: rgba(244, 63, 94, 0.2); } 100% { background: transparent; } }
+
+        /* ── Scrollbars ── */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+
+        /* ── Text Input ── */
+        .text-input-bar { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .text-input-bar:focus-within { border-color: rgba(66, 133, 244, 0.3); }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- HEADER                                                         -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <header class="h-14 shrink-0 glass-panel border-x-0 border-t-0 border-b flex items-center px-6 justify-between z-50">
+        <div class="flex items-center gap-4">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-teal-500 flex items-center justify-center shadow-lg">
+                <i data-lucide="brain" class="w-4 h-4 text-white"></i>
+            </div>
+            <div>
+                <h1 class="text-[11px] font-black tracking-widest text-white uppercase">Athena</h1>
+                <p class="text-[8px] font-mono text-slate-500 uppercase tracking-wider">Gemini Live Calendar Agent &bull; v1.0</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-6">
+            <div id="phase-indicator" class="phase-badge phase-report">
+                <div class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></div>
+                Phase 1: Report
+            </div>
+            <div class="flex items-center gap-2 text-[9px] font-mono uppercase font-black" id="gcal-status">
+                <div class="w-1.5 h-1.5 rounded-full bg-slate-600"></div>
+                <span class="text-slate-600">GCal</span>
+            </div>
+            <div class="flex items-center gap-2 text-[9px] font-mono uppercase font-black" id="gemini-status">
+                <div class="w-1.5 h-1.5 rounded-full bg-slate-600"></div>
+                <span class="text-slate-600">Gemini</span>
+            </div>
+            <div class="text-[9px] font-mono text-slate-600 uppercase" id="session-timer">00:00</div>
+        </div>
+    </header>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- MAIN LAYOUT                                                    -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <main class="flex-1 flex overflow-hidden">
+
+        <!-- ── LEFT: Main Chat/Report Feed ── -->
+        <div class="flex-1 flex flex-col bg-[#050505]" id="main-column">
+
+            <!-- Scrollable content -->
+            <div class="flex-1 overflow-y-auto" id="chat-container">
+                <div class="p-6 max-w-5xl mx-auto w-full space-y-6" id="chat-feed">
+                    <!-- Agent messages and report will appear here -->
+                    <div class="flex items-center justify-center h-full min-h-[200px]">
+                        <div class="text-center space-y-4">
+                            <div class="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500/20 to-teal-500/20 border border-blue-500/20 flex items-center justify-center mx-auto">
+                                <i data-lucide="calendar-check" class="w-7 h-7 text-blue-400"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm text-slate-400 font-medium">Voice Schedule Analyst</p>
+                                <p class="text-xs text-slate-600 mt-1">Click the orb or type below to analyze your calendar</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── TEXT INPUT BAR ── -->
+            <div class="shrink-0 px-6 pb-2">
+                <div class="max-w-5xl mx-auto text-input-bar rounded-xl flex items-center gap-3 px-4 py-2.5">
+                    <i data-lucide="message-square" class="w-4 h-4 text-slate-600 shrink-0"></i>
+                    <input type="text" id="text-input" placeholder="Type a question about your schedule..."
+                        class="flex-1 bg-transparent text-sm text-slate-300 placeholder-slate-600 outline-none"
+                        onkeydown="if(event.key==='Enter')sendTextMessage()">
+                    <button onclick="sendTextMessage()" class="text-[9px] font-black text-blue-400 uppercase tracking-wider hover:text-blue-300 transition-colors px-2">
+                        Send
+                    </button>
+                </div>
+            </div>
+
+            <!-- ── VOICE CONTROL BAR ── -->
+            <div class="shrink-0 glass-panel border-t border-x-0 border-b-0 px-6 py-4" id="voice-bar">
+                <div class="max-w-5xl mx-auto flex items-center gap-6">
+
+                    <!-- Orb -->
+                    <div class="voice-orb-container">
+                        <div class="orb-ring" id="ring1"></div>
+                        <div class="orb-ring" id="ring2"></div>
+                        <div class="orb-ring" id="ring3"></div>
+                        <div class="voice-orb" id="voice-orb" onclick="toggleVoice()"></div>
+                    </div>
+
+                    <!-- State Info -->
+                    <div class="flex-1">
+                        <div class="flex items-center gap-3 mb-1">
+                            <span class="text-[10px] font-black uppercase tracking-widest text-slate-400" id="voice-state-label">Ready</span>
+                            <span class="text-[8px] font-mono text-slate-600 uppercase" id="voice-state-sub">Click orb or press Space to talk</span>
+                        </div>
+
+                        <!-- Waveform -->
+                        <div class="waveform" id="waveform">
+                            <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+                            <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+                            <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+                            <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+                            <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+                            <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+                            <div class="wave-bar"></div><div class="wave-bar"></div>
+                        </div>
+
+                        <!-- Thinking dots (hidden by default) -->
+                        <div class="thought-dots hidden" id="thinking-dots">
+                            <div class="thought-dot"></div>
+                            <div class="thought-dot"></div>
+                            <div class="thought-dot"></div>
+                            <span class="text-[9px] text-purple-400 font-mono ml-2" id="thinking-text">Analyzing your calendar...</span>
+                        </div>
+                    </div>
+
+                    <!-- Divider -->
+                    <div class="w-px h-8 bg-white/10"></div>
+
+                    <!-- Controls -->
+                    <div class="flex items-center gap-3">
+                        <button class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all relative group" id="btn-mic-mute" onclick="toggleMicMute()" title="Mute Microphone (M)">
+                            <i data-lucide="mic" class="w-4 h-4" id="mic-icon"></i>
+                            <span class="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-[8px] text-slate-300 px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Mute (M)</span>
+                        </button>
+                        <button class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all relative group" id="btn-pause" onclick="togglePause()" title="Pause (P)">
+                            <i data-lucide="pause" class="w-4 h-4" id="pause-icon"></i>
+                            <span class="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-[8px] text-slate-300 px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Pause (P)</span>
+                        </button>
+                        <button class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all relative group" onclick="endSession()" title="End Session">
+                            <i data-lucide="phone-off" class="w-4 h-4"></i>
+                            <span class="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-[8px] text-slate-300 px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">End</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── RIGHT SIDEBAR ── -->
+        <div class="w-[380px] bg-[#0a0a0a] border-l border-white/10 flex flex-col overflow-hidden">
+
+            <!-- Live Transcript -->
+            <div class="flex-1 flex flex-col min-h-0">
+                <div class="p-4 pb-2 shrink-0">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="scroll-text" class="w-3.5 h-3.5 text-teal-400"></i>
+                            <h3 class="text-[9px] font-black text-white uppercase tracking-widest">Live Transcript</h3>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="w-1.5 h-1.5 rounded-full" id="transcript-dot"></div>
+                            <span class="text-[8px] font-mono text-slate-600 uppercase" id="transcript-status">Waiting...</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex-1 overflow-y-auto px-4 pb-4 space-y-2" id="transcript-feed">
+                    <div class="text-[10px] text-slate-600 italic text-center py-8">
+                        Transcript appears here during conversation
+                    </div>
+                </div>
+            </div>
+
+            <!-- Separator -->
+            <div class="border-t border-white/5"></div>
+
+            <!-- Active Intentions (Placeholder) -->
+            <div class="p-4 border-b border-white/5">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="zap" class="w-3.5 h-3.5 text-blue-400"></i>
+                        <h3 class="text-[9px] font-black text-white uppercase tracking-widest">Active Intentions</h3>
+                    </div>
+                    <div class="px-2 py-0.5 rounded bg-blue-500/10 text-[8px] font-mono text-blue-400 uppercase font-black" id="intent-count">0 Active</div>
+                </div>
+                <div class="text-[10px] text-slate-600 italic text-center py-2">
+                    Voice commands create intentions here
+                </div>
+            </div>
+
+            <!-- Brain Rules -->
+            <div class="p-4 max-h-[200px] overflow-y-auto">
+                <div class="flex items-center gap-2 mb-3">
+                    <i data-lucide="book-open" class="w-3.5 h-3.5 text-purple-400"></i>
+                    <h3 class="text-[9px] font-black text-white uppercase tracking-widest">Grooming Rules</h3>
+                </div>
+                <div class="space-y-1.5 text-[10px] text-slate-500" id="brain-rules">
+                    <div class="flex items-start gap-2"><span class="text-purple-400 shrink-0">R-01</span> Never move deep work or focus blocks</div>
+                    <div class="flex items-start gap-2"><span class="text-purple-400 shrink-0">R-02</span> Protect family time and kid events</div>
+                    <div class="flex items-start gap-2"><span class="text-purple-400 shrink-0">R-03</span> 1:1s and syncs are moveable</div>
+                    <div class="flex items-start gap-2"><span class="text-purple-400 shrink-0">R-04</span> Flag 3+ back-to-back meetings</div>
+                    <div class="flex items-start gap-2"><span class="text-purple-400 shrink-0">R-05</span> Suggest consolidating scattered meetings</div>
+                    <div class="flex items-start gap-2"><span class="text-purple-400 shrink-0">R-06</span> Protect 10am-12pm for peak energy work</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- JAVASCRIPT                                                     -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <script>
+        // ══════════════════════════════════════════════════════
+        // CONFIG
+        // ══════════════════════════════════════════════════════
+        const API_BASE = window.location.origin; // Same origin (Flask serves this)
+        const ADK_BASE = 'http://localhost:8000'; // ADK web server (local dev)
+        let sessionId = null;
+        let voiceState = 'idle';
+        let micMuted = false;
+        let isPaused = false;
+        let sessionSeconds = 0;
+        let stateBeforePause = 'idle';
+
+        // ══════════════════════════════════════════════════════
+        // INITIALIZATION
+        // ══════════════════════════════════════════════════════
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            await checkBackendHealth();
+            startSessionTimer();
+        });
+
+        async function checkBackendHealth() {
+            // Check Gemini
+            try {
+                const res = await fetch(`${API_BASE}/health/gemini`);
+                const data = await res.json();
+                const el = document.getElementById('gemini-status');
+                if (data.status === 'connected') {
+                    el.innerHTML = '<div class="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse"></div><span class="text-purple-400">Gemini</span>';
+                } else {
+                    el.innerHTML = '<div class="w-1.5 h-1.5 rounded-full bg-rose-500"></div><span class="text-rose-400">Gemini</span>';
+                }
+            } catch (e) {
+                console.error('[HEALTH] Gemini check failed:', e);
+            }
+
+            // Check Calendar by fetching today's events
+            try {
+                const res = await fetch(`${API_BASE}/schedule-analyst/analyze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ time_range: 'today' })
+                });
+                const data = await res.json();
+                const el = document.getElementById('gcal-status');
+                if (!data.error) {
+                    el.innerHTML = '<div class="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse"></div><span class="text-teal-500">GCal</span>';
+                } else {
+                    el.innerHTML = '<div class="w-1.5 h-1.5 rounded-full bg-rose-500"></div><span class="text-rose-400">GCal</span>';
+                }
+            } catch (e) {
+                console.error('[HEALTH] Calendar check failed:', e);
+            }
+        }
+
+        function startSessionTimer() {
+            setInterval(() => {
+                sessionSeconds++;
+                const m = String(Math.floor(sessionSeconds / 60)).padStart(2, '0');
+                const s = String(sessionSeconds % 60).padStart(2, '0');
+                document.getElementById('session-timer').textContent = `${m}:${s}`;
+            }, 1000);
+        }
+
+        // ══════════════════════════════════════════════════════
+        // VOICE STATE MACHINE
+        // ══════════════════════════════════════════════════════
+        function setVoiceState(state) {
+            voiceState = state;
+            const orb = document.getElementById('voice-orb');
+            const label = document.getElementById('voice-state-label');
+            const sub = document.getElementById('voice-state-sub');
+            const waveform = document.getElementById('waveform');
+            const thinkDots = document.getElementById('thinking-dots');
+            const rings = [document.getElementById('ring1'), document.getElementById('ring2'), document.getElementById('ring3')];
+            const dot = document.getElementById('transcript-dot');
+
+            orb.className = 'voice-orb';
+            waveform.classList.remove('active');
+            thinkDots.classList.add('hidden');
+            rings.forEach(r => r.classList.remove('active'));
+
+            switch(state) {
+                case 'idle':
+                    label.textContent = 'Ready';
+                    label.className = 'text-[10px] font-black uppercase tracking-widest text-slate-400';
+                    sub.textContent = 'Click orb or press Space to talk';
+                    dot.className = 'w-1.5 h-1.5 rounded-full bg-slate-600';
+                    break;
+                case 'listening':
+                    orb.classList.add('listening');
+                    label.textContent = 'Listening';
+                    label.className = 'text-[10px] font-black uppercase tracking-widest text-blue-400';
+                    sub.textContent = 'Speak your question — click orb when done';
+                    waveform.classList.add('active');
+                    rings.forEach(r => r.classList.add('active'));
+                    dot.className = 'w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse';
+                    break;
+                case 'thinking':
+                    orb.classList.add('thinking');
+                    label.textContent = 'Processing';
+                    label.className = 'text-[10px] font-black uppercase tracking-widest text-purple-400';
+                    sub.textContent = 'Analyzing your calendar...';
+                    thinkDots.classList.remove('hidden');
+                    dot.className = 'w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse';
+                    break;
+                case 'speaking':
+                    orb.classList.add('speaking');
+                    label.textContent = 'Athena Speaking';
+                    label.className = 'text-[10px] font-black uppercase tracking-widest text-teal-400';
+                    sub.textContent = 'Click orb to interrupt';
+                    waveform.classList.add('active');
+                    document.querySelectorAll('.wave-bar').forEach(b => b.style.background = '#14b8a6');
+                    dot.className = 'w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse';
+                    break;
+                case 'paused':
+                    orb.classList.add('paused');
+                    label.textContent = 'Paused';
+                    label.className = 'text-[10px] font-black uppercase tracking-widest text-amber-400';
+                    sub.textContent = 'Press P or click Pause to resume';
+                    dot.className = 'w-1.5 h-1.5 rounded-full bg-amber-400';
+                    break;
+                case 'muted':
+                    label.textContent = 'Mic Muted';
+                    label.className = 'text-[10px] font-black uppercase tracking-widest text-rose-400';
+                    sub.textContent = 'Mic off — press M to unmute';
+                    dot.className = 'w-1.5 h-1.5 rounded-full bg-rose-400';
+                    break;
+            }
+
+            if (state !== 'speaking') {
+                document.querySelectorAll('.wave-bar').forEach(b => b.style.background = '#4285f4');
+            }
+
+            // Update transcript status
+            const statusEl = document.getElementById('transcript-status');
+            const statusMap = { idle: 'Waiting...', listening: 'User speaking', thinking: 'Processing...', speaking: 'Athena speaking', paused: 'Paused', muted: 'Muted' };
+            statusEl.textContent = statusMap[state] || 'Waiting...';
+        }
+
+        // ══════════════════════════════════════════════════════
+        // ORB CLICK
+        // ══════════════════════════════════════════════════════
+        function toggleVoice() {
+            if (voiceState === 'speaking') {
+                bargeIn();
+            } else if (voiceState === 'paused') {
+                togglePause();
+            } else if (voiceState === 'idle') {
+                setVoiceState('listening');
+                addTranscriptLine('system', 'Listening started — speak your question');
+            } else if (voiceState === 'listening') {
+                setVoiceState('idle');
+                addTranscriptLine('system', 'Listening stopped');
+            }
+        }
+
+        // ══════════════════════════════════════════════════════
+        // TEXT MESSAGE (ADK backend)
+        // ══════════════════════════════════════════════════════
+        async function sendTextMessage() {
+            const input = document.getElementById('text-input');
+            const text = input.value.trim();
+            if (!text) return;
+            input.value = '';
+
+            // Add user message to chat and transcript
+            addChatMessage('user', text);
+            addTranscriptLine('user', text);
+            setVoiceState('thinking');
+
+            try {
+                // Use the Flask /schedule-analyst/question endpoint
+                const res = await fetch(`${API_BASE}/schedule-analyst/question`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: text, time_range: 'next 7 days' })
+                });
+                const data = await res.json();
+
+                setVoiceState('speaking');
+                const answer = data.answer || data.error || 'No response received.';
+                addChatMessage('agent', answer);
+                addTranscriptLine('agent', answer);
+
+                // Show events count if available
+                if (data.event_count > 0) {
+                    addTranscriptLine('system', `${data.event_count} calendar events analyzed`);
+                }
+
+                setTimeout(() => setVoiceState('idle'), 2000);
+            } catch (e) {
+                console.error('[SEND] Error:', e);
+                setVoiceState('idle');
+                addChatMessage('agent', 'Sorry, I had trouble connecting. Please try again.');
+                addTranscriptLine('system', 'Connection error');
+            }
+        }
+
+        // ══════════════════════════════════════════════════════
+        // ANALYZE (fetch full report)
+        // ══════════════════════════════════════════════════════
+        async function fetchAnalysis(timeRange = 'next 7 days') {
+            setVoiceState('thinking');
+            addTranscriptLine('system', `Analyzing calendar: ${timeRange}`);
+
+            try {
+                const res = await fetch(`${API_BASE}/schedule-analyst/analyze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ time_range: timeRange })
+                });
+                const data = await res.json();
+
+                setVoiceState('speaking');
+
+                if (data.error) {
+                    addChatMessage('agent', `Error: ${data.error}`);
+                    addTranscriptLine('agent', data.error);
+                } else {
+                    // Build a rich report message
+                    const summary = data.summary || `Found ${data.event_count} events, ${data.conflicts?.length || 0} conflicts.`;
+                    addChatMessage('agent', summary);
+                    addTranscriptLine('agent', summary);
+
+                    if (data.conflicts?.length > 0) {
+                        data.conflicts.forEach(c => {
+                            addTranscriptLine('system', `Conflict: ${c.event1} vs ${c.event2} (${c.overlap_minutes}min overlap)`);
+                        });
+                    }
+                    if (data.back_to_back?.length > 0) {
+                        data.back_to_back.forEach(b => {
+                            addTranscriptLine('system', `Warning: ${b.warning}`);
+                        });
+                    }
+                }
+
+                setTimeout(() => setVoiceState('idle'), 2000);
+            } catch (e) {
+                console.error('[ANALYZE] Error:', e);
+                setVoiceState('idle');
+                addChatMessage('agent', 'Failed to analyze calendar. Check connection.');
+                addTranscriptLine('system', 'Analysis failed');
+            }
+        }
+
+        // ══════════════════════════════════════════════════════
+        // CHAT FEED (left panel)
+        // ══════════════════════════════════════════════════════
+        function addChatMessage(role, text) {
+            const feed = document.getElementById('chat-feed');
+
+            // Remove placeholder if present
+            const placeholder = feed.querySelector('.min-h-\\[200px\\]');
+            if (placeholder) placeholder.remove();
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'flex gap-4 message-anim';
+
+            const iconBg = role === 'user' ? 'bg-blue-500/10 border-blue-500/20' : 'bg-teal-500/10 border-teal-500/20';
+            const iconColor = role === 'user' ? 'text-blue-400' : 'text-teal-400';
+            const iconName = role === 'user' ? 'user' : 'bot';
+            const label = role === 'user' ? 'You' : 'Athena';
+            const labelColor = role === 'user' ? 'text-blue-400' : 'text-teal-400';
+
+            const now = new Date();
+            const time = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+            wrapper.innerHTML = `
+                <div class="w-8 h-8 rounded-lg ${iconBg} border flex items-center justify-center shrink-0">
+                    <i data-lucide="${iconName}" class="w-4 h-4 ${iconColor}"></i>
+                </div>
+                <div class="pt-0.5 flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="text-[10px] font-black uppercase tracking-widest ${labelColor}">${label}</span>
+                        <span class="text-[8px] font-mono text-slate-600">${time}</span>
+                    </div>
+                    <p class="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">${escapeHtml(text)}</p>
+                </div>
+            `;
+
+            feed.appendChild(wrapper);
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+            // Auto-scroll
+            const container = document.getElementById('chat-container');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // ══════════════════════════════════════════════════════
+        // TRANSCRIPT (right panel)
+        // ══════════════════════════════════════════════════════
+        function addTranscriptLine(type, text) {
+            const feed = document.getElementById('transcript-feed');
+
+            // Remove placeholder
+            const placeholder = feed.querySelector('.italic');
+            if (placeholder && placeholder.textContent.includes('appears here')) {
+                placeholder.remove();
+            }
+
+            const div = document.createElement('div');
+            const cls = type === 'user' ? 'user-line' : type === 'agent' ? 'agent-line' : 'system-line';
+            div.className = `transcript-line ${cls} text-[10px] text-slate-400 message-anim`;
+
+            const now = new Date();
+            const time = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+
+            const roleLabel = type === 'user'
+                ? '<span class="font-black text-blue-400 uppercase text-[8px] tracking-wider">User</span>'
+                : type === 'agent'
+                ? '<span class="font-black text-teal-400 uppercase text-[8px] tracking-wider">Athena</span>'
+                : '<span class="font-black text-slate-600 uppercase text-[8px] tracking-wider">System</span>';
+
+            div.innerHTML = `
+                <div class="flex items-center gap-2 mb-0.5">
+                    ${roleLabel}
+                    <span class="text-[7px] font-mono text-slate-700">${time}</span>
+                </div>
+                <div class="text-slate-400">${escapeHtml(text)}</div>
+            `;
+
+            feed.appendChild(div);
+
+            // Auto-scroll to newest
+            feed.scrollTop = feed.scrollHeight;
+        }
+
+        // ══════════════════════════════════════════════════════
+        // CONTROLS
+        // ══════════════════════════════════════════════════════
+        function toggleMicMute() {
+            micMuted = !micMuted;
+            const btn = document.getElementById('btn-mic-mute');
+            if (micMuted) {
+                btn.classList.add('bg-rose-500/20', 'border-rose-500/30', 'text-rose-400');
+                btn.classList.remove('bg-white/5', 'border-white/10', 'text-slate-400');
+                setVoiceState('muted');
+                addTranscriptLine('system', 'Microphone muted');
+            } else {
+                btn.classList.remove('bg-rose-500/20', 'border-rose-500/30', 'text-rose-400');
+                btn.classList.add('bg-white/5', 'border-white/10', 'text-slate-400');
+                setVoiceState('idle');
+                addTranscriptLine('system', 'Microphone unmuted');
+            }
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function togglePause() {
+            isPaused = !isPaused;
+            const btn = document.getElementById('btn-pause');
+            if (isPaused) {
+                stateBeforePause = voiceState;
+                btn.classList.add('bg-amber-500/20', 'border-amber-500/30', 'text-amber-400');
+                btn.classList.remove('bg-white/5', 'border-white/10', 'text-slate-400');
+                setVoiceState('paused');
+                addTranscriptLine('system', 'Session paused');
+            } else {
+                btn.classList.remove('bg-amber-500/20', 'border-amber-500/30', 'text-amber-400');
+                btn.classList.add('bg-white/5', 'border-white/10', 'text-slate-400');
+                setVoiceState(stateBeforePause);
+                addTranscriptLine('system', 'Session resumed');
+            }
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function bargeIn() {
+            const bar = document.getElementById('voice-bar');
+            bar.classList.add('barge-in-flash');
+            setTimeout(() => bar.classList.remove('barge-in-flash'), 300);
+            addTranscriptLine('system', 'Barge-in — interrupted');
+            setVoiceState('listening');
+        }
+
+        function endSession() {
+            setVoiceState('idle');
+            sessionSeconds = 0;
+            addTranscriptLine('system', 'Session ended');
+            addChatMessage('agent', 'Session ended. Click the orb or type below to start a new conversation.');
+        }
+
+        // ══════════════════════════════════════════════════════
+        // KEYBOARD SHORTCUTS
+        // ══════════════════════════════════════════════════════
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+
+            switch(e.code) {
+                case 'Space':
+                    e.preventDefault();
+                    toggleVoice();
+                    break;
+                case 'KeyP':
+                    e.preventDefault();
+                    togglePause();
+                    break;
+                case 'KeyM':
+                    e.preventDefault();
+                    toggleMicMute();
+                    break;
+                case 'KeyA':
+                    e.preventDefault();
+                    fetchAnalysis('next 7 days');
+                    break;
+            }
+        });
+
+        // ══════════════════════════════════════════════════════
+        // UTILITIES
+        // ══════════════════════════════════════════════════════
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
