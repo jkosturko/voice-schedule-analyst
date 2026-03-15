@@ -102,6 +102,16 @@ def _parse_time_range(time_range: str) -> tuple[datetime, datetime]:
         except ValueError:
             pass
 
+    # Try parsing as a specific date (e.g., "Monday, March 16, 2026")
+    try:
+        parsed = dateparser.parse(time_range)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        day_start = parsed.replace(hour=0, minute=0, second=0, microsecond=0)
+        return day_start, day_start + timedelta(days=1)
+    except (ValueError, TypeError):
+        pass
+
     # Default: this week
     monday = today_start - timedelta(days=today_start.weekday())
     return monday, monday + timedelta(days=7)
