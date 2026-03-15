@@ -6,3 +6,4 @@ google-api-python-client>=2.120.0
 flask>=3.0.0
 gunicorn>=22.0.0
 python-dateutil>=2.9.0
+pyaudio>=0.2.14  # Voice mode only — mic/speaker I/O

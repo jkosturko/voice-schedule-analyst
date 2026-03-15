@@ -3,16 +3,44 @@
 This module provides the voice interface using Gemini's Live API
 for real-time audio streaming. The user speaks, the agent listens,
 queries the calendar, and speaks back analysis.
+
+Supports three modes:
+  - voice: Full duplex audio (mic → Live API → speakers)
+  - text:  Text-only Live API session (for testing without audio hardware)
+  - demo:  Scripted demo mode for recording competition video
 """
 
 import asyncio
+import base64
 import json
+import os
 import sys
+import wave
+import io
+import struct
+import logging
 
 from google import genai
 from google.genai import types
 
 from .calendar_tools import get_calendar_events, find_conflicts, suggest_optimizations
+
+logger = logging.getLogger(__name__)
+
+# Audio constants — Live API expects 16kHz mono 16-bit PCM
+SEND_SAMPLE_RATE = 16000
+RECEIVE_SAMPLE_RATE = 24000  # Live API outputs 24kHz
+CHUNK_SIZE = 1024
+FORMAT_BYTES = 2  # 16-bit = 2 bytes per sample
+CHANNELS = 1
+
+# Load brain rules for system instruction
+BRAIN_PATH = os.path.join(os.path.dirname(__file__), "..", "brain", "schedule-analysis-rules.md")
+try:
+    with open(BRAIN_PATH, "r") as f:
+        BRAIN_RULES = f.read()
+except FileNotFoundError:
+    BRAIN_RULES = ""
 
 # Tool declarations for the Live API (function calling)
 TOOL_DECLARATIONS = types.Tool(
@@ -59,7 +87,7 @@ TOOL_DECLARATIONS = types.Tool(
     ]
 )
 
-SYSTEM_INSTRUCTION = """You are a Voice Schedule Analyst — a conversational, voice-first calendar assistant.
+SYSTEM_INSTRUCTION = f"""You are a Voice Schedule Analyst — a conversational, voice-first calendar assistant.
 
 You help users understand and optimize their schedules by analyzing their Google Calendar events. You speak naturally, like a trusted chief of staff briefing their executive.
 
@@ -72,14 +100,7 @@ Voice Output Rules:
 - Never output raw JSON — speak in sentences
 - Be warm but efficient
 
-Schedule Analysis Rules:
-1. Creative blocks (Deep Work, Focus Time) are PROTECTED — never suggest removing them
-2. Triple-bookings are critical, double-bookings are warnings
-3. Travel events need 1.5 hour buffer before departure
-4. 3+ back-to-back meetings trigger a meeting fatigue warning
-5. Gaps under 30 minutes between meetings are dead time
-6. Morning routines before 9am are protected
-7. Family events take priority over moveable work events
+{BRAIN_RULES}
 
 Always end with an offer to dig deeper: "Want me to look at a specific day?" or "Should I check for conflicts?"
 """
@@ -89,6 +110,17 @@ TOOL_FUNCTIONS = {
     "find_conflicts": find_conflicts,
     "suggest_optimizations": suggest_optimizations,
 }
+
+
+def _check_api_key():
+    """Verify GOOGLE_API_KEY is set before attempting connection."""
+    key = os.environ.get("GOOGLE_API_KEY", "")
+    if not key:
+        print("ERROR: GOOGLE_API_KEY environment variable not set.")
+        print("Set it with: export GOOGLE_API_KEY=your-key")
+        print("Get a key at: https://aistudio.google.com/app/apikey")
+        sys.exit(1)
+    return key
 
 
 async def handle_tool_call(function_call):
@@ -104,12 +136,20 @@ async def handle_tool_call(function_call):
         result = func(**args)
         return result
     except Exception as e:
+        logger.error("[TOOL_ERROR] %s: %s", name, e)
         return {"error": f"Tool execution failed: {str(e)}"}
 
 
-async def _process_session_response(session):
-    """Process responses from the Live API session, handling tool calls."""
+async def _process_session_response(session, audio_queue=None):
+    """Process responses from the Live API session, handling tool calls.
+
+    Args:
+        session: The Live API session.
+        audio_queue: Optional asyncio.Queue for audio playback.
+                     If None, audio data is logged but not played.
+    """
     async for message in session.receive():
+        # Handle tool calls
         if message.tool_call:
             for fc in message.tool_call.function_calls:
                 print(f"  🔧 Calling {fc.name}...")
@@ -125,20 +165,110 @@ async def _process_session_response(session):
                 )
             continue
 
+        # Handle server content (text or audio)
         if message.server_content:
             if message.server_content.model_turn:
                 for part in message.server_content.model_turn.parts:
                     if part.text:
                         print(f"  📅 Analyst: {part.text}")
-                    if part.inline_data:
-                        print(f"  🔊 [Audio response: {len(part.inline_data.data)} bytes]")
+                    if part.inline_data and part.inline_data.data:
+                        if audio_queue is not None:
+                            await audio_queue.put(part.inline_data.data)
+                        else:
+                            print(f"  🔊 [Audio: {len(part.inline_data.data)} bytes]")
 
             if message.server_content.turn_complete:
+                if audio_queue is not None:
+                    await audio_queue.put(None)  # Signal end of turn
                 break
 
 
+async def _mic_audio_stream(session):
+    """Capture microphone audio and stream to Live API session.
+
+    Uses pyaudio for cross-platform mic capture. Streams 16kHz mono PCM.
+    """
+    try:
+        import pyaudio
+    except ImportError:
+        print("ERROR: pyaudio not installed. Run: pip install pyaudio")
+        print("On macOS: brew install portaudio && pip install pyaudio")
+        return
+
+    pa = pyaudio.PyAudio()
+
+    stream = pa.open(
+        format=pyaudio.paInt16,
+        channels=CHANNELS,
+        rate=SEND_SAMPLE_RATE,
+        input=True,
+        frames_per_buffer=CHUNK_SIZE,
+    )
+
+    print("🎙️  Microphone active — speak now!")
+
+    try:
+        while True:
+            data = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: stream.read(CHUNK_SIZE, exception_on_overflow=False)
+            )
+            # Send raw PCM audio to Live API
+            await session.send_realtime_input(
+                audio=types.Blob(
+                    data=data,
+                    mime_type=f"audio/pcm;rate={SEND_SAMPLE_RATE}",
+                )
+            )
+    except asyncio.CancelledError:
+        pass
+    finally:
+        stream.stop_stream()
+        stream.close()
+        pa.terminate()
+
+
+async def _play_audio(audio_queue):
+    """Play audio chunks from the queue through speakers.
+
+    Receives 24kHz PCM from Live API and plays via pyaudio.
+    """
+    try:
+        import pyaudio
+    except ImportError:
+        # Drain queue silently if pyaudio unavailable
+        while True:
+            chunk = await audio_queue.get()
+            if chunk is None:
+                break
+        return
+
+    pa = pyaudio.PyAudio()
+    stream = pa.open(
+        format=pyaudio.paInt16,
+        channels=CHANNELS,
+        rate=RECEIVE_SAMPLE_RATE,
+        output=True,
+    )
+
+    try:
+        while True:
+            chunk = await audio_queue.get()
+            if chunk is None:
+                break
+            await asyncio.get_event_loop().run_in_executor(
+                None, lambda c=chunk: stream.write(c)
+            )
+    except asyncio.CancelledError:
+        pass
+    finally:
+        stream.stop_stream()
+        stream.close()
+        pa.terminate()
+
+
 async def run_voice_agent():
-    """Run the voice agent with Gemini Live API for real-time audio interaction."""
+    """Run the voice agent with real-time microphone → Live API → speakers."""
+    _check_api_key()
     client = genai.Client()
 
     config = types.LiveConnectConfig(
@@ -150,7 +280,7 @@ async def run_voice_agent():
         speech_config=types.SpeechConfig(
             voice_config=types.VoiceConfig(
                 prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                    voice_name="Kore"
+                    voice_name="Kore"  # Warm, professional voice
                 )
             )
         ),
@@ -160,52 +290,44 @@ async def run_voice_agent():
     print("=" * 50)
     print("Connecting to Gemini Live API...")
 
-    async with client.aio.live.connect(
-        model="gemini-2.0-flash-live-001",
-        config=config,
-    ) as session:
-        print("✅ Connected! Speak or type your schedule questions.")
-        print("Type 'quit' to exit.\n")
+    try:
+        async with client.aio.live.connect(
+            model="gemini-2.0-flash-live-001",
+            config=config,
+        ) as session:
+            print("✅ Connected!")
+            print("Speak naturally — the agent will respond with voice.")
+            print("Press Ctrl+C to exit.\n")
 
-        await session.send_client_content(
-            turns=types.Content(
-                role="user",
-                parts=[types.Part(text="Hello! I'd like to know about my schedule.")],
-            ),
-            turn_complete=True,
-        )
+            audio_queue = asyncio.Queue()
 
-        await _process_session_response(session)
+            # Start mic capture in background
+            mic_task = asyncio.create_task(_mic_audio_stream(session))
 
-        while True:
             try:
-                user_input = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: input("\n🗣️  You: ")
-                )
-            except (EOFError, KeyboardInterrupt):
-                print("\n👋 Goodbye!")
-                break
+                while True:
+                    # Process each response turn, playing audio
+                    play_task = asyncio.create_task(_play_audio(audio_queue))
+                    await _process_session_response(session, audio_queue=audio_queue)
+                    await play_task
+            except asyncio.CancelledError:
+                pass
+            finally:
+                mic_task.cancel()
+                try:
+                    await mic_task
+                except asyncio.CancelledError:
+                    pass
 
-            if user_input.lower().strip() in ("quit", "exit", "bye"):
-                print("👋 Goodbye!")
-                break
-
-            if not user_input.strip():
-                continue
-
-            await session.send_client_content(
-                turns=types.Content(
-                    role="user",
-                    parts=[types.Part(text=user_input)],
-                ),
-                turn_complete=True,
-            )
-
-            await _process_session_response(session)
+    except Exception as e:
+        logger.error("[LIVE_API_ERROR] %s", e)
+        print(f"\n❌ Connection error: {e}")
+        print("Check your GOOGLE_API_KEY and internet connection.")
 
 
 async def run_text_agent():
     """Run the agent in text-only mode (for testing without audio hardware)."""
+    _check_api_key()
     client = genai.Client()
 
     config = types.LiveConnectConfig(
@@ -220,48 +342,128 @@ async def run_text_agent():
     print("=" * 50)
     print("Connecting to Gemini Live API...")
 
-    async with client.aio.live.connect(
-        model="gemini-2.0-flash-live-001",
-        config=config,
-    ) as session:
-        print("✅ Connected! Type your schedule questions.")
-        print("Type 'quit' to exit.\n")
+    try:
+        async with client.aio.live.connect(
+            model="gemini-2.0-flash-live-001",
+            config=config,
+        ) as session:
+            print("✅ Connected! Type your schedule questions.")
+            print("Type 'quit' to exit.\n")
 
-        while True:
-            try:
-                user_input = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: input("\n🗣️  You: ")
+            while True:
+                try:
+                    user_input = await asyncio.get_event_loop().run_in_executor(
+                        None, lambda: input("\n🗣️  You: ")
+                    )
+                except (EOFError, KeyboardInterrupt):
+                    print("\n👋 Goodbye!")
+                    break
+
+                if user_input.lower().strip() in ("quit", "exit", "bye"):
+                    print("👋 Goodbye!")
+                    break
+
+                if not user_input.strip():
+                    continue
+
+                await session.send_client_content(
+                    turns=types.Content(
+                        role="user",
+                        parts=[types.Part(text=user_input)],
+                    ),
+                    turn_complete=True,
                 )
-            except (EOFError, KeyboardInterrupt):
-                print("\n👋 Goodbye!")
-                break
 
-            if user_input.lower().strip() in ("quit", "exit", "bye"):
-                print("👋 Goodbye!")
-                break
+                await _process_session_response(session)
 
-            if not user_input.strip():
-                continue
+    except Exception as e:
+        logger.error("[LIVE_API_ERROR] %s", e)
+        print(f"\n❌ Connection error: {e}")
+        print("Check your GOOGLE_API_KEY and internet connection.")
 
-            await session.send_client_content(
-                turns=types.Content(
-                    role="user",
-                    parts=[types.Part(text=user_input)],
-                ),
-                turn_complete=True,
-            )
 
-            await _process_session_response(session)
+async def run_demo_agent():
+    """Scripted demo mode — sends pre-written queries for video recording.
+
+    Perfect for recording the 4-minute competition demo video.
+    Runs in text mode with TEXT responses so output is visible on screen.
+    """
+    _check_api_key()
+    client = genai.Client()
+
+    config = types.LiveConnectConfig(
+        response_modalities=["TEXT"],
+        tools=[TOOL_DECLARATIONS],
+        system_instruction=types.Content(
+            parts=[types.Part(text=SYSTEM_INSTRUCTION)]
+        ),
+    )
+
+    DEMO_QUERIES = [
+        "Hey, what does my week look like?",
+        "Are there any scheduling conflicts I should worry about?",
+        "How can I optimize my schedule for more deep work time?",
+        "Am I free Thursday afternoon?",
+    ]
+
+    print("\n🎬 Voice Schedule Analyst — Demo Mode")
+    print("=" * 50)
+    print("Connecting to Gemini Live API...")
+
+    try:
+        async with client.aio.live.connect(
+            model="gemini-2.0-flash-live-001",
+            config=config,
+        ) as session:
+            print("✅ Connected! Running demo sequence...\n")
+
+            for i, query in enumerate(DEMO_QUERIES, 1):
+                print(f"\n{'─' * 40}")
+                print(f"  Demo Query {i}/{len(DEMO_QUERIES)}")
+                print(f"  🗣️  User: {query}")
+                print(f"{'─' * 40}")
+
+                await session.send_client_content(
+                    turns=types.Content(
+                        role="user",
+                        parts=[types.Part(text=query)],
+                    ),
+                    turn_complete=True,
+                )
+
+                await _process_session_response(session)
+
+                # Pause between queries for readability in video
+                if i < len(DEMO_QUERIES):
+                    print("\n  ⏳ Next query in 3 seconds...")
+                    await asyncio.sleep(3)
+
+            print(f"\n{'=' * 50}")
+            print("🎬 Demo complete!")
+
+    except Exception as e:
+        logger.error("[DEMO_ERROR] %s", e)
+        print(f"\n❌ Error: {e}")
 
 
 def main():
-    """Entry point — run voice agent, fall back to text mode."""
+    """Entry point — select mode via CLI argument."""
     mode = sys.argv[1] if len(sys.argv) > 1 else "text"
 
-    if mode == "voice":
-        asyncio.run(run_voice_agent())
-    else:
-        asyncio.run(run_text_agent())
+    modes = {
+        "voice": run_voice_agent,
+        "text": run_text_agent,
+        "demo": run_demo_agent,
+    }
+
+    runner = modes.get(mode)
+    if not runner:
+        print(f"Unknown mode: {mode}")
+        print(f"Available modes: {', '.join(modes.keys())}")
+        sys.exit(1)
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    asyncio.run(runner())
 
 
 if __name__ == "__main__":

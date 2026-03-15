@@ -13,18 +13,51 @@ A **voice-first calendar analyst** powered by Google ADK and the Gemini Live API
 ## Architecture
 
 ```
-User (Voice) ──► Gemini Live API (audio in/out)
-                      │
+┌─────────────────────────────────────────────────────────┐
+│                    User (Voice / Text)                   │
+└─────────────────────┬───────────────────────────────────┘
+                      │ audio stream / text
                       ▼
-              Google ADK Agent
-              (Cloud Run on GCP)
-                      │
-              ┌───────┼───────┐
-              ▼       ▼       ▼
-         Google    Gemini   Brain Rules
-        Calendar   2.0     (configurable
-          API    (reasoning)  preferences)
+┌─────────────────────────────────────────────────────────┐
+│              Gemini Live API                             │
+│         (gemini-2.0-flash-live-001)                     │
+│         Real-time audio ↔ text, interrupts              │
+└─────────────────────┬───────────────────────────────────┘
+                      │ function calls
+                      ▼
+┌─────────────────────────────────────────────────────────┐
+│           Google ADK Agent (Cloud Run)                   │
+│                                                         │
+│  ┌──────────────┐ ┌──────────────┐ ┌────────────────┐  │
+│  │ get_calendar  │ │ find_        │ │ suggest_       │  │
+│  │ _events()     │ │ conflicts()  │ │ optimizations()│  │
+│  └──────┬───────┘ └──────┬───────┘ └───────┬────────┘  │
+│         │                │                  │           │
+│         ▼                ▼                  ▼           │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │          Google Calendar API v3                   │   │
+│  │     (OAuth local / Service Account cloud)         │   │
+│  └──────────────────────────────────────────────────┘   │
+│                                                         │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │       Brain Rules (brain/*.md)                    │   │
+│  │  Protected events, fatigue thresholds, priorities │   │
+│  └──────────────────────────────────────────────────┘   │
+│                                                         │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │    Gemini 2.0 Flash (summary generation)          │   │
+│  │    Natural language responses for HTTP endpoints   │   │
+│  └──────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────┘
 ```
+
+### Three Ways to Run
+
+| Mode | Command | Use Case |
+|------|---------|----------|
+| **ADK Web UI** | `adk web schedule_analyst` | Interactive development + testing |
+| **Live API (voice/text)** | `python -m schedule_analyst` | Real-time voice conversations |
+| **HTTP Server** | `python main.py` | Cloud Run / webhook integration |
 
 ## Tech Stack
 
@@ -152,15 +185,37 @@ voice-schedule-analyst/
 └── requirements.txt
 ```
 
+## Testing
+
+36 tests covering all core logic — no credentials needed (fully mocked):
+
+```bash
+source .venv/bin/activate
+python -m pytest tests/ -v
+```
+
+Test coverage:
+- Time range parsing (today, tomorrow, this week, next N days, fallbacks)
+- Event formatting and field extraction
+- Conflict detection (overlaps, severity classification)
+- Back-to-back meeting chain detection
+- Dead-time gap identification
+- Event classification (protected vs moveable)
+- Optimization suggestions (conflict resolution, deep work, consolidation)
+- All Flask HTTP endpoints (health, analyze, optimize, question)
+- Error propagation from Calendar API failures
+
 ## Competition Category
 
 **Live Agents** — Real-time audio/vision with interrupt capability.
 
 This agent demonstrates:
-- Natural voice interaction (not a text chatbot)
-- Real Google Calendar data integration
-- Configurable analysis rules (brain files)
-- Clean Cloud Run deployment with automated deploy script
+- **Natural voice interaction** — speaks conversationally, not robotic lists
+- **Real data integration** — live Google Calendar events, not synthetic data
+- **Configurable brain** — human-readable markdown rules loaded at startup, no code changes needed
+- **Three tool functions** — calendar fetch, conflict detection, optimization suggestions
+- **Production-ready deployment** — Dockerfile, Artifact Registry, Cloud Run with one-command deploy
+- **Comprehensive test suite** — 36 tests, all mocked, runs in <1s
 
 ## License
 
