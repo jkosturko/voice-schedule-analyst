@@ -1123,16 +1123,22 @@
         // ══════════════════════════════════════════════════════
         function toggleVoice() {
             if (voiceState === 'speaking') {
+                // Speaking → Barge-in (interrupt + switch to listening)
                 bargeIn();
             } else if (voiceState === 'paused') {
+                // Paused → Resume listening
                 togglePause();
             } else if (voiceState === 'idle') {
+                // Idle → Start session + listen
                 setVoiceState('listening');
                 addTranscriptLine('system', 'Connecting to Gemini Live...');
                 startLiveSession();
             } else if (voiceState === 'listening') {
-                stopLiveSession();
-                addTranscriptLine('system', 'Listening stopped');
+                // Listening → Pause (mic stops streaming, session stays open)
+                togglePause();
+            } else if (voiceState === 'muted') {
+                // Muted → Unmute
+                toggleMicMute();
             }
         }
 
@@ -1342,6 +1348,10 @@
         function toggleMicMute() {
             micMuted = !micMuted;
             const btn = document.getElementById('btn-mic-mute');
+            // Actually disable/enable the mic audio track
+            if (mediaStream) {
+                mediaStream.getAudioTracks().forEach(t => t.enabled = !micMuted);
+            }
             if (micMuted) {
                 btn.classList.add('bg-rose-500/20', 'border-rose-500/30', 'text-rose-400');
                 btn.classList.remove('bg-white/5', 'border-white/10', 'text-slate-400');
@@ -1359,16 +1369,24 @@
         function togglePause() {
             isPaused = !isPaused;
             const btn = document.getElementById('btn-pause');
+            // Actually pause/resume the mic track + audio playback
+            if (mediaStream) {
+                mediaStream.getAudioTracks().forEach(t => t.enabled = !isPaused);
+            }
             if (isPaused) {
                 stateBeforePause = voiceState;
+                // Suspend playback context to pause any playing audio
+                if (playbackContext && playbackContext.state === 'running') playbackContext.suspend();
                 btn.classList.add('bg-amber-500/20', 'border-amber-500/30', 'text-amber-400');
                 btn.classList.remove('bg-white/5', 'border-white/10', 'text-slate-400');
                 setVoiceState('paused');
                 addTranscriptLine('system', 'Session paused');
             } else {
+                // Resume playback context
+                if (playbackContext && playbackContext.state === 'suspended') playbackContext.resume();
                 btn.classList.remove('bg-amber-500/20', 'border-amber-500/30', 'text-amber-400');
                 btn.classList.add('bg-white/5', 'border-white/10', 'text-slate-400');
-                setVoiceState(stateBeforePause);
+                setVoiceState(stateBeforePause || 'listening');
                 addTranscriptLine('system', 'Session resumed');
             }
             if (typeof lucide !== 'undefined') lucide.createIcons();
