@@ -7,7 +7,8 @@ set -euo pipefail
 PROJECT_ID="${1:-${GOOGLE_CLOUD_PROJECT:-}}"
 REGION="${2:-us-east1}"
 SERVICE_NAME="schedule-analyst"
-IMAGE_NAME="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
+REPO_NAME="schedule-analyst"
+IMAGE_NAME="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${SERVICE_NAME}"
 
 if [ -z "$PROJECT_ID" ]; then
   echo "Error: PROJECT_ID required."
@@ -19,18 +20,36 @@ fi
 echo "=== Deploying ${SERVICE_NAME} to Cloud Run ==="
 echo "Project: ${PROJECT_ID}"
 echo "Region:  ${REGION}"
+echo "Image:   ${IMAGE_NAME}"
 echo ""
 
 # Step 1: Enable required APIs
 echo ">>> Enabling required APIs..."
-gcloud services enable run.googleapis.com containerregistry.googleapis.com calendar-json.googleapis.com \
+gcloud services enable \
+  run.googleapis.com \
+  artifactregistry.googleapis.com \
+  cloudbuild.googleapis.com \
+  calendar-json.googleapis.com \
   --project "${PROJECT_ID}" 2>/dev/null || true
 
-# Step 2: Build container image via Cloud Build
-echo ">>> Building container image..."
-gcloud builds submit --tag "${IMAGE_NAME}" --project "${PROJECT_ID}"
+# Step 2: Create Artifact Registry repo (idempotent)
+echo ">>> Ensuring Artifact Registry repository exists..."
+gcloud artifacts repositories describe "${REPO_NAME}" \
+  --location="${REGION}" \
+  --project="${PROJECT_ID}" 2>/dev/null || \
+gcloud artifacts repositories create "${REPO_NAME}" \
+  --repository-format=docker \
+  --location="${REGION}" \
+  --project="${PROJECT_ID}" \
+  --description="Voice Schedule Analyst container images"
 
-# Step 3: Deploy to Cloud Run
+# Step 3: Build container image via Cloud Build
+echo ">>> Building container image..."
+gcloud builds submit \
+  --tag "${IMAGE_NAME}" \
+  --project "${PROJECT_ID}"
+
+# Step 4: Deploy to Cloud Run
 echo ">>> Deploying to Cloud Run..."
 gcloud run deploy "${SERVICE_NAME}" \
   --image "${IMAGE_NAME}" \
@@ -43,9 +62,10 @@ gcloud run deploy "${SERVICE_NAME}" \
   --cpu 1 \
   --min-instances 0 \
   --max-instances 3 \
-  --timeout 60
+  --timeout 120 \
+  --concurrency 10
 
-# Step 4: Get the service URL
+# Step 5: Get the service URL
 SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" \
   --platform managed \
   --region "${REGION}" \

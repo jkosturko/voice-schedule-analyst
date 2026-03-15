@@ -9,7 +9,7 @@ Tools return structured dicts that the ADK agent reasons about via Gemini.
 
 import os
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from google.oauth2 import service_account
@@ -68,7 +68,7 @@ def _get_calendar_service():
 
 def _parse_time_range(time_range: str) -> tuple[datetime, datetime]:
     """Convert natural language time range to start/end datetimes."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     tr = time_range.lower().strip()
