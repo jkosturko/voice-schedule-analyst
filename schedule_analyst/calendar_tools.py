@@ -1,8 +1,9 @@
 """Google Calendar tools for the Schedule Analyst agent.
 
-Supports two auth modes:
-  - Service account (Cloud Run): set GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS
-  - OAuth (local dev): set GOOGLE_CALENDAR_CREDENTIALS_PATH to a client_secrets file
+Supports three auth modes (tried in order):
+  1. Service account: set GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS
+  2. OAuth token via env var (Cloud Run): set GOOGLE_CALENDAR_TOKEN_JSON to token.json contents
+  3. OAuth token file (local dev): token.json on disk, or run `python -m schedule_analyst.auth`
 
 Tools return structured dicts that the ADK agent reasons about via Gemini.
 """
@@ -21,6 +22,9 @@ from dateutil import parser as dateparser
 
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 TOKEN_PATH = os.path.join(os.path.dirname(__file__), "..", "token.json")
+
+# Calendar ID — configurable via env var, defaults to "primary"
+CALENDAR_ID = os.environ.get("GOOGLE_CALENDAR_ID", "primary")
 
 
 def _get_calendar_service():
@@ -46,7 +50,16 @@ def _get_calendar_service():
             creds = creds.with_subject(target_user)
         return build("calendar", "v3", credentials=creds)
 
-    # OAuth mode (local development)
+    # OAuth token via env var (Cloud Run — token.json contents as string)
+    token_json = os.environ.get("GOOGLE_CALENDAR_TOKEN_JSON")
+    if token_json:
+        info = json.loads(token_json)
+        creds = Credentials.from_authorized_user_info(info, SCOPES)
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        return build("calendar", "v3", credentials=creds)
+
+    # OAuth token file (local development)
     creds = None
     if os.path.exists(TOKEN_PATH):
         creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
@@ -138,7 +151,7 @@ def get_calendar_events(time_range: str = "this week") -> dict:
         events_result = (
             service.events()
             .list(
-                calendarId="primary",
+                calendarId=CALENDAR_ID,
                 timeMin=start_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 timeMax=end_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 maxResults=50,

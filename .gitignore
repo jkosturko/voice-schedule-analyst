@@ -10,3 +10,5 @@ build/
 .pytest_cache/
 credentials.json
 token.json
+client_secret_*.json
+.DS_Store

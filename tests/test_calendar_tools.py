@@ -1,5 +1,7 @@
 """Tests for calendar_tools — mock calendar data, no credentials needed."""
 
+import json
+import os
 import unittest
 from unittest.mock import patch, MagicMock
 from datetime import datetime, timedelta, timezone
@@ -206,6 +208,39 @@ def _mock_calendar_list(events):
         "items": events
     }
     return service
+
+
+class TestAuthModes(unittest.TestCase):
+    """Test _get_calendar_service auth mode selection."""
+
+    @patch("schedule_analyst.calendar_tools.build")
+    @patch("schedule_analyst.calendar_tools.Credentials")
+    def test_token_json_env_var(self, mock_creds_class, mock_build):
+        """GOOGLE_CALENDAR_TOKEN_JSON env var should be used for OAuth on Cloud Run."""
+        fake_token = json.dumps({
+            "token": "fake-access-token",
+            "refresh_token": "fake-refresh-token",
+            "client_id": "fake-client-id",
+            "client_secret": "fake-client-secret",
+        })
+        mock_creds = MagicMock()
+        mock_creds.expired = False
+        mock_creds.valid = True
+        mock_creds_class.from_authorized_user_info.return_value = mock_creds
+
+        with patch.dict(os.environ, {
+            "GOOGLE_CALENDAR_TOKEN_JSON": fake_token,
+        }, clear=False):
+            # Clear service account vars so we fall through to token path
+            env = os.environ.copy()
+            env.pop("GOOGLE_SERVICE_ACCOUNT_JSON", None)
+            env.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+            with patch.dict(os.environ, env, clear=True):
+                from schedule_analyst.calendar_tools import _get_calendar_service
+                _get_calendar_service()
+
+        mock_creds_class.from_authorized_user_info.assert_called_once()
+        mock_build.assert_called_once_with("calendar", "v3", credentials=mock_creds)
 
 
 class TestGetCalendarEvents(unittest.TestCase):
