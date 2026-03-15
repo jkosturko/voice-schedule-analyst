@@ -158,6 +158,7 @@ async def _process_session_response(session, audio_queue=None):
                 await session.send_tool_response(
                     function_responses=[
                         types.FunctionResponse(
+                            id=fc.id,
                             name=fc.name,
                             response=result,
                         )
@@ -292,7 +293,7 @@ async def run_voice_agent():
 
     try:
         async with client.aio.live.connect(
-            model="gemini-2.0-flash-live-001",
+            model="gemini-2.5-flash-native-audio-latest",
             config=config,
         ) as session:
             print("✅ Connected!")
@@ -331,20 +332,27 @@ async def run_text_agent():
     client = genai.Client()
 
     config = types.LiveConnectConfig(
-        response_modalities=["TEXT"],
+        response_modalities=["AUDIO"],
         tools=[TOOL_DECLARATIONS],
         system_instruction=types.Content(
             parts=[types.Part(text=SYSTEM_INSTRUCTION)]
         ),
+        speech_config=types.SpeechConfig(
+            voice_config=types.VoiceConfig(
+                prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                    voice_name="Kore"
+                )
+            )
+        ),
     )
 
-    print("\n📅 Voice Schedule Analyst — Text Mode")
+    print("\n📅 Voice Schedule Analyst — Text Input Mode (audio responses discarded)")
     print("=" * 50)
     print("Connecting to Gemini Live API...")
 
     try:
         async with client.aio.live.connect(
-            model="gemini-2.0-flash-live-001",
+            model="gemini-2.5-flash-native-audio-latest",
             config=config,
         ) as session:
             print("✅ Connected! Type your schedule questions.")
@@ -392,10 +400,17 @@ async def run_demo_agent():
     client = genai.Client()
 
     config = types.LiveConnectConfig(
-        response_modalities=["TEXT"],
+        response_modalities=["AUDIO"],
         tools=[TOOL_DECLARATIONS],
         system_instruction=types.Content(
             parts=[types.Part(text=SYSTEM_INSTRUCTION)]
+        ),
+        speech_config=types.SpeechConfig(
+            voice_config=types.VoiceConfig(
+                prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                    voice_name="Kore"
+                )
+            )
         ),
     )
 
@@ -412,7 +427,7 @@ async def run_demo_agent():
 
     try:
         async with client.aio.live.connect(
-            model="gemini-2.0-flash-live-001",
+            model="gemini-2.5-flash-native-audio-latest",
             config=config,
         ) as session:
             print("✅ Connected! Running demo sequence...\n")

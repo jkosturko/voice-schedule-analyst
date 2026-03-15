@@ -30,6 +30,25 @@ def health():
     })
 
 
+@app.route("/health/gemini", methods=["GET"])
+def health_gemini():
+    """Verify Gemini API key works — generates a one-line response."""
+    try:
+        client = genai.Client()
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents="Say 'Gemini is connected' in exactly 4 words.",
+        )
+        return jsonify({
+            "status": "connected",
+            "model": "gemini-2.0-flash",
+            "response": response.text.strip(),
+        })
+    except Exception as e:
+        logger.error("[GEMINI_HEALTH_ERROR] %s", e)
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
 @app.route("/schedule-analyst/analyze", methods=["POST"])
 def analyze():
     """Analyze schedule — find conflicts, gaps, back-to-back warnings."""
@@ -93,20 +112,22 @@ def question():
         return jsonify({"error": "question is required"}), 400
 
     events_result = get_calendar_events(time_range="this week")
-    if events_result.get("error"):
-        logger.error("[QUESTION_ERROR] %s", events_result["error"])
-        return jsonify({"error": events_result["error"]}), 500
+    calendar_error = events_result.get("error")
+    if calendar_error:
+        logger.warning("[QUESTION_CALENDAR_WARN] %s — answering without calendar data", calendar_error)
 
     summary = _generate_summary(
         events_result,
         None,
-        f"Answer this question about the user's schedule: {q}. Be conversational and specific.",
+        f"Answer this question about the user's schedule: {q}. Be conversational and specific."
+        + (" Note: Calendar data is unavailable — answer generally." if calendar_error else ""),
     )
 
     return jsonify({
         "answer": summary,
         "question": q,
         "event_count": events_result.get("count", 0),
+        "calendar_connected": not bool(calendar_error),
     })
 
 

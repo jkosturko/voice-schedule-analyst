@@ -30,7 +30,7 @@ graph TB
     end
 
     subgraph GeminiLive["Gemini Live API"]
-        LiveModel["gemini-2.0-flash-live-001<br/>Real-time streaming + interrupts"]
+        LiveModel["gemini-2.5-flash-native-audio-latest<br/>Real-time streaming + interrupts"]
     end
 
     subgraph Agent["Google ADK Agent · Cloud Run"]
@@ -77,7 +77,7 @@ sequenceDiagram
 | Component | Technology |
 |-----------|-----------|
 | **Agent Framework** | [Google Agent Development Kit (ADK)](https://google.github.io/adk-docs/) |
-| **Voice Interface** | Gemini Live API (`gemini-2.0-flash-live-001`) |
+| **Voice Interface** | Gemini Live API (`gemini-2.5-flash-native-audio-latest`) |
 | **Calendar Data** | Google Calendar API v3 |
 | **Deployment** | Google Cloud Run (Docker, one-command deploy) |
 | **Language** | Python 3.12+ |

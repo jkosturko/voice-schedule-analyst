@@ -10,7 +10,7 @@ graph TB
     end
 
     subgraph GeminiLive["☁️ Gemini Live API"]
-        LiveModel["gemini-2.0-flash-live-001<br/>Real-time streaming<br/>Natural interruptions"]
+        LiveModel["gemini-2.5-flash-native-audio-latest<br/>Real-time streaming<br/>Natural interruptions"]
     end
 
     subgraph ADKAgent["🤖 Google ADK Agent — Cloud Run"]
@@ -130,7 +130,7 @@ sequenceDiagram
 
 | Component | Role | Technology |
 |-----------|------|-----------|
-| **Gemini Live API** | Real-time voice ↔ text, streaming, interruptions | `gemini-2.0-flash-live-001` |
+| **Gemini Live API** | Real-time voice ↔ text, streaming, interruptions | `gemini-2.5-flash-native-audio-latest` |
 | **ADK Root Agent** | Tool orchestration, system instruction, brain rules | `google-adk` |
 | **Calendar Tools** | Event fetching, conflict detection, optimization logic | `google-api-python-client` |
 | **Brain Rules** | Configurable analysis preferences (markdown) | Human-editable `.md` |
