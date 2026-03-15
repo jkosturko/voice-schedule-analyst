@@ -411,7 +411,7 @@
         let audioContext = null;
         let micProcessor = null;
         let playbackContext = null;
-        let playbackQueue = [];
+        let nextPlayTime = 0;       // AudioContext timeline cursor for gapless scheduling
         let isPlaying = false;
         let pendingAgentText = '';
 
@@ -477,7 +477,9 @@
                 liveSocket.close();
             }
             liveSocket = null;
-            playbackQueue = [];
+            // Stop all scheduled audio by closing and resetting playback context
+            if (playbackContext) { playbackContext.close(); playbackContext = null; }
+            nextPlayTime = 0;
             isPlaying = false;
         }
 
@@ -575,9 +577,10 @@
                 }
             }
 
-            // Interrupted
+            // Interrupted — stop all scheduled audio
             if (event.interrupted) {
-                playbackQueue = [];
+                if (playbackContext) { playbackContext.close(); playbackContext = null; }
+                nextPlayTime = 0;
                 isPlaying = false;
                 setVoiceState('listening');
                 addTranscriptLine('system', 'Interrupted');
@@ -585,21 +588,17 @@
         }
 
         function enqueueAudio(base64Data) {
-            const bytes = base64ToArrayBuffer(base64Data);
-            playbackQueue.push(bytes);
-            if (!isPlaying) playNextChunk();
-        }
-
-        function playNextChunk() {
-            if (playbackQueue.length === 0) {
-                isPlaying = false;
-                if (voiceState === 'speaking') setVoiceState('listening');
-                return;
+            // Gapless scheduled playback — each chunk is scheduled at the exact
+            // end of the previous chunk on the AudioContext timeline. No gaps.
+            if (!playbackContext) {
+                playbackContext = new AudioContext({ sampleRate: RECEIVE_SAMPLE_RATE });
+                nextPlayTime = 0;
             }
-            isPlaying = true;
-            if (!playbackContext) playbackContext = new AudioContext({ sampleRate: RECEIVE_SAMPLE_RATE });
 
-            const pcmBytes = playbackQueue.shift();
+            // Resume if suspended (browser autoplay policy)
+            if (playbackContext.state === 'suspended') playbackContext.resume();
+
+            const pcmBytes = base64ToArrayBuffer(base64Data);
             const int16 = new Int16Array(pcmBytes);
             const float32 = new Float32Array(int16.length);
             for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768.0;
@@ -610,8 +609,25 @@
             const src = playbackContext.createBufferSource();
             src.buffer = buffer;
             src.connect(playbackContext.destination);
-            src.onended = () => playNextChunk();
-            src.start();
+
+            // Schedule this chunk right after the previous one ends
+            const now = playbackContext.currentTime;
+            const startAt = Math.max(now, nextPlayTime);
+            src.start(startAt);
+            nextPlayTime = startAt + buffer.duration;
+
+            if (!isPlaying) {
+                isPlaying = true;
+            }
+
+            // Track when all scheduled audio finishes
+            src.onended = () => {
+                // Only transition state if no more audio is scheduled ahead
+                if (playbackContext.currentTime >= nextPlayTime - 0.05) {
+                    isPlaying = false;
+                    if (voiceState === 'speaking') setVoiceState('listening');
+                }
+            };
         }
 
         function arrayBufferToBase64(buffer) {
@@ -1362,8 +1378,9 @@
             const bar = document.getElementById('voice-bar');
             bar.classList.add('barge-in-flash');
             setTimeout(() => bar.classList.remove('barge-in-flash'), 300);
-            // Stop playback immediately
-            playbackQueue = [];
+            // Stop all scheduled audio immediately
+            if (playbackContext) { playbackContext.close(); playbackContext = null; }
+            nextPlayTime = 0;
             isPlaying = false;
             addTranscriptLine('system', 'Barge-in — interrupted');
             setVoiceState('listening');
