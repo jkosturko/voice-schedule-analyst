@@ -7,17 +7,43 @@ recommendations, and optimization suggestions.
 Built for the Gemini Live Agent Challenge 2026.
 """
 
+import contextlib
 import os
 
 from google.adk import Agent
+from google.adk.models.google_llm import Gemini
+from google.adk.models.llm_request import LlmRequest
+from google.adk.models.base_llm import BaseLlmConnection
 from google.genai import types
 
 from .calendar_tools import get_calendar_events, find_conflicts, suggest_optimizations
 
-# Model selection: native audio for Live API voice, text model for web/CLI
-# ADK web and adk run use generateContent which requires a text-capable model.
-# The live_agent.py pipeline uses the native audio model directly.
-AGENT_MODEL = os.environ.get("SCHEDULE_ANALYST_MODEL", "gemini-2.5-flash")
+# Model config: text model for generateContent, native audio for bidiGenerateContent (Live API)
+# No single model supports both — gemini-2.5-flash supports text, native-audio supports live.
+TEXT_MODEL = os.environ.get("SCHEDULE_ANALYST_MODEL", "gemini-2.5-flash")
+LIVE_MODEL = os.environ.get("SCHEDULE_ANALYST_LIVE_MODEL", "gemini-2.5-flash-native-audio-latest")
+
+
+class DualModelGemini(Gemini):
+    """Gemini model that uses different models for text vs live (voice) mode.
+
+    generateContent uses TEXT_MODEL (gemini-2.5-flash).
+    bidiGenerateContent uses LIVE_MODEL (gemini-2.5-flash-native-audio).
+    """
+
+    live_model: str = LIVE_MODEL
+
+    @contextlib.asynccontextmanager
+    async def connect(self, llm_request: LlmRequest) -> BaseLlmConnection:
+        """Override connect to swap in the native audio model for live sessions."""
+        original_model = llm_request.model
+        llm_request.model = self.live_model
+        try:
+            async with super().connect(llm_request) as connection:
+                yield connection
+        finally:
+            llm_request.model = original_model
+
 
 # Load brain rules for dynamic system instruction
 BRAIN_PATH = os.path.join(os.path.dirname(__file__), "..", "brain", "schedule-analysis-rules.md")
@@ -53,7 +79,17 @@ You help users understand and optimize their schedules by analyzing their Google
 
 root_agent = Agent(
     name="schedule_analyst",
-    model=AGENT_MODEL,  # Default: gemini-2.5-flash (text); override via SCHEDULE_ANALYST_MODEL env var
+    model=DualModelGemini(
+        model=TEXT_MODEL,      # generateContent (text chat in ADK web)
+        live_model=LIVE_MODEL,  # bidiGenerateContent (voice/mic in ADK web)
+        speech_config=types.SpeechConfig(
+            voice_config=types.VoiceConfig(
+                prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                    voice_name="Kore"  # Warm, professional voice
+                )
+            )
+        ),
+    ),
     description="Voice-first calendar analyst that speaks schedule insights, conflicts, and optimization suggestions",
     instruction=SYSTEM_INSTRUCTION,
     tools=[get_calendar_events, find_conflicts, suggest_optimizations],
