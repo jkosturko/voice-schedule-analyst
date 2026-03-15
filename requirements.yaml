@@ -588,7 +588,7 @@ requirements:
       test_count: 0
 
   - id: ui-013
-    name: "Discuss with Athena button"
+    name: "Discuss button (voice mode transition)"
     status: "Not Started"
     priority: "Could Have"
     eval_driven: false
@@ -710,6 +710,74 @@ requirements:
       tested: true
       test_count: 0
       notes: "Public repo at github.com/jkosturko/voice-schedule-analyst. GitHub push protection verified — caught and blocked OAuth tokens. .gitignore covers secrets."
+
+  # ═══ IP PROTECTION (before making repo public) ═══
+
+  - id: ip-001
+    name: "Strip Athena/Obsidian references from public repo"
+    status: "Not Started"
+    priority: "MVP"
+    eval_driven: false
+    description: |
+      Remove all references to the unreleased Athena platform before
+      making the repo public. The submission should look like a
+      standalone voice calendar agent.
+    acceptance_criteria:
+      - "No occurrences of 'Athena' in any file (grep -ri athena returns nothing)"
+      - "No occurrences of 'Obsidian' in any file"
+      - "No references to intent scoring, SLOs, or manifest contracts"
+      - "Star rating widget removed from UI (doesn't make sense without platform context)"
+    replacements:
+      # static/index.html
+      - from: "Brain Rules"
+        to: "Scheduling Policies"
+      - from: "brain-rules"
+        to: "scheduling-policies"
+      - from: "brain icon (lucide)"
+        to: "book-open or shield-check icon"
+      # requirements.yaml (this file — strip before publishing)
+      - from: "Athena-portable"
+        to: "reusable component"
+      - from: "Athena dispatcher"
+        to: "external orchestrator"
+      - from: "Athena"
+        to: "platform" or remove entirely
+      - from: "obsidian palette"
+        to: "dark theme"
+      - from: "Obsidian"
+        to: remove
+      # docs/architecture.md
+      - from: "Athena Observer" section
+        to: remove entirely or rename to "External Orchestrator (Optional)"
+      - from: "Athena Dispatcher"
+        to: "HTTP Webhook Client"
+      # main.py
+      - from: "Athena integration"
+        to: "webhook integration"
+      # ui-013
+      - from: "Discuss with Athena"
+        to: "Discuss" or "Voice Mode"
+    test_steps:
+      - "Run: grep -ri 'athena' ~/Development/schedule-analyst/ --include='*.py' --include='*.md' --include='*.yaml' --include='*.html' | grep -v .venv"
+      - "Assert: zero results"
+      - "Run: grep -ri 'obsidian' ~/Development/schedule-analyst/ --include='*.py' --include='*.md' --include='*.yaml' --include='*.html' | grep -v .venv"
+      - "Assert: zero results"
+      - "Open the app in Chrome → assert no Athena/Obsidian text visible"
+    regression_tests:
+      - "AFTER stripping, run FULL regression against all passing requirements:"
+      - "Grid loads with real calendar data (ui-001)"
+      - "Accept button executes calendar mutation (cal-004, cal-005, cal-006)"
+      - "Voice orb toggles and streams audio (voice-001, voice-002 — Jessica tests)"
+      - "Transcript shows conversation entries (ui-003)"
+      - "Scheduling Policies section renders (renamed from Brain Rules)"
+      - "Cloud Run deployment still works after redeploy (deploy-001)"
+      - "No console errors in Chrome DevTools"
+      - "No broken CSS (elements that referenced old class names)"
+      - "FAIL if any previously passing requirement now fails after the rename"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
 
   # ═══ COMPETITION DELIVERABLES ═══
 
