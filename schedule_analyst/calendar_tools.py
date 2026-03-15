@@ -1,39 +1,34 @@
 """Google Calendar tools for the Schedule Analyst agent.
 
-These tools fetch real calendar data and return structured results
-that the agent can reason about and speak back to the user.
+Supports two auth modes:
+  - Service account (Cloud Run): set GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS
+  - OAuth (local dev): set GOOGLE_CALENDAR_CREDENTIALS_PATH to a client_secrets file
 
-Auth modes:
-  - OAuth (local dev): Uses credentials.json + token.json via InstalledAppFlow
-  - Service account (Cloud Run): Uses GOOGLE_SERVICE_ACCOUNT_JSON env var
+Tools return structured dicts that the ADK agent reasons about via Gemini.
 """
 
 import os
 import json
-import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from google.oauth2.credentials import Credentials
 from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
-
-logger = logging.getLogger(__name__)
+from dateutil import parser as dateparser
 
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
-TOKEN_PATH = os.environ.get("TOKEN_PATH", "token.json")
+TOKEN_PATH = os.path.join(os.path.dirname(__file__), "..", "token.json")
 
 
 def _get_calendar_service():
-    """Build and return an authenticated Google Calendar API service.
+    """Build authenticated Google Calendar service.
 
-    Supports two auth modes:
-      1. Service account (GOOGLE_SERVICE_ACCOUNT_JSON env var) — for Cloud Run
-      2. OAuth (credentials.json + token.json) — for local development
+    Tries service account first (Cloud Run), falls back to OAuth (local dev).
     """
-    # Mode 1: Service account (Cloud Run / production)
+    # Service account mode
     sa_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
     if sa_json:
         info = json.loads(sa_json)
@@ -43,7 +38,15 @@ def _get_calendar_service():
             creds = creds.with_subject(target_user)
         return build("calendar", "v3", credentials=creds)
 
-    # Mode 2: OAuth (local development)
+    sa_file = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    if sa_file and os.path.exists(sa_file):
+        creds = service_account.Credentials.from_service_account_file(sa_file, scopes=SCOPES)
+        target_user = os.environ.get("CALENDAR_OWNER_EMAIL")
+        if target_user:
+            creds = creds.with_subject(target_user)
+        return build("calendar", "v3", credentials=creds)
+
+    # OAuth mode (local development)
     creds = None
     if os.path.exists(TOKEN_PATH):
         creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
@@ -55,11 +58,6 @@ def _get_calendar_service():
             credentials_path = os.environ.get(
                 "GOOGLE_CALENDAR_CREDENTIALS_PATH", "credentials.json"
             )
-            if not os.path.exists(credentials_path):
-                raise FileNotFoundError(
-                    f"No credentials found. Set GOOGLE_SERVICE_ACCOUNT_JSON for Cloud Run, "
-                    f"or place {credentials_path} for local OAuth."
-                )
             flow = InstalledAppFlow.from_client_secrets_file(credentials_path, SCOPES)
             creds = flow.run_local_server(port=0)
         with open(TOKEN_PATH, "w") as token:
@@ -68,48 +66,59 @@ def _get_calendar_service():
     return build("calendar", "v3", credentials=creds)
 
 
-def _parse_time_range(time_range: str) -> tuple[str, str]:
-    """Convert natural language time range to ISO datetime bounds."""
-    now = datetime.now()
+def _parse_time_range(time_range: str) -> tuple[datetime, datetime]:
+    """Convert natural language time range to start/end datetimes."""
+    now = datetime.utcnow()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    ranges = {
-        "today": (today_start, today_start + timedelta(days=1)),
-        "tomorrow": (today_start + timedelta(days=1), today_start + timedelta(days=2)),
-        "this week": (today_start, today_start + timedelta(days=(7 - now.weekday()))),
-        "next week": (
-            today_start + timedelta(days=(7 - now.weekday())),
-            today_start + timedelta(days=(14 - now.weekday())),
-        ),
-        "next 3 days": (today_start, today_start + timedelta(days=3)),
-        "next 7 days": (today_start, today_start + timedelta(days=7)),
-    }
+    tr = time_range.lower().strip()
+    if tr in ("today", ""):
+        return today_start, today_start + timedelta(days=1)
+    elif tr == "tomorrow":
+        return today_start + timedelta(days=1), today_start + timedelta(days=2)
+    elif tr in ("this week", "week"):
+        monday = today_start - timedelta(days=today_start.weekday())
+        return monday, monday + timedelta(days=7)
+    elif tr == "next week":
+        monday = today_start - timedelta(days=today_start.weekday()) + timedelta(weeks=1)
+        return monday, monday + timedelta(days=7)
+    elif tr.startswith("next ") and tr.endswith(" days"):
+        try:
+            n = int(tr.replace("next ", "").replace(" days", ""))
+            return today_start, today_start + timedelta(days=n)
+        except ValueError:
+            pass
 
-    start, end = ranges.get(time_range.lower().strip(), ranges["this week"])
-    return start.isoformat() + "Z", end.isoformat() + "Z"
+    # Default: this week
+    monday = today_start - timedelta(days=today_start.weekday())
+    return monday, monday + timedelta(days=7)
 
 
 def _format_event(event: dict) -> dict:
     """Extract relevant fields from a Google Calendar event."""
     start = event.get("start", {})
     end = event.get("end", {})
-
-    start_str = start.get("dateTime", start.get("date", ""))
-    end_str = end.get("dateTime", end.get("date", ""))
-
     return {
         "id": event.get("id", ""),
         "summary": event.get("summary", "(No title)"),
-        "start": start_str,
-        "end": end_str,
+        "start": start.get("dateTime", start.get("date", "")),
+        "end": end.get("dateTime", end.get("date", "")),
         "location": event.get("location", ""),
-        "description": event.get("description", "")[:200],
-        "attendees": [
-            a.get("email", "") for a in event.get("attendees", [])[:5]
-        ],
+        "description": (event.get("description", "") or "")[:200],
+        "attendees": [a.get("email", "") for a in event.get("attendees", [])[:5]],
         "status": event.get("status", "confirmed"),
-        "is_all_day": "date" in start and "dateTime" not in start,
     }
+
+
+def _format_events_text(events: list[dict]) -> str:
+    """Format events into a human-readable string for LLM context."""
+    if not events:
+        return "No events found in this time range."
+    lines = []
+    for ev in events:
+        loc = f" at {ev['location']}" if ev.get("location") else ""
+        lines.append(f"- {ev['summary']}: {ev['start']} to {ev['end']}{loc}")
+    return "\n".join(lines)
 
 
 def get_calendar_events(time_range: str = "this week") -> dict:
@@ -117,21 +126,21 @@ def get_calendar_events(time_range: str = "this week") -> dict:
 
     Args:
         time_range: Natural language time range like 'today', 'this week',
-                    'tomorrow', 'next 3 days', 'next 7 days'. Defaults to 'this week'.
+                    'tomorrow', 'next 3 days'. Defaults to 'this week'.
 
     Returns:
         Dictionary with events list, count, and time range queried.
     """
     try:
         service = _get_calendar_service()
-        time_min, time_max = _parse_time_range(time_range)
+        start_dt, end_dt = _parse_time_range(time_range)
 
         events_result = (
             service.events()
             .list(
                 calendarId="primary",
-                timeMin=time_min,
-                timeMax=time_max,
+                timeMin=start_dt.isoformat() + "Z",
+                timeMax=end_dt.isoformat() + "Z",
                 maxResults=50,
                 singleEvents=True,
                 orderBy="startTime",
@@ -144,147 +153,248 @@ def get_calendar_events(time_range: str = "this week") -> dict:
 
         return {
             "events": events,
+            "events_text": _format_events_text(events),
             "count": len(events),
             "time_range": time_range,
-            "time_min": time_min,
-            "time_max": time_max,
-        }
-    except FileNotFoundError:
-        return {
-            "error": "Calendar credentials not found. Please set up OAuth credentials.",
-            "events": [],
-            "count": 0,
         }
     except Exception as e:
         return {
             "error": f"Failed to fetch calendar events: {str(e)}",
             "events": [],
+            "events_text": "Error fetching events.",
             "count": 0,
         }
 
 
 def find_conflicts(time_range: str = "this week") -> dict:
-    """Find scheduling conflicts (overlapping events) in the given time range.
+    """Find scheduling conflicts, overlapping events, back-to-back chains, and dead time gaps.
 
     Args:
         time_range: Natural language time range. Defaults to 'this week'.
 
     Returns:
-        Dictionary with conflicts found, their severity, and affected events.
+        Dictionary with conflicts, back-to-back warnings, dead time gaps, and counts.
     """
     result = get_calendar_events(time_range)
     if result.get("error"):
         return result
 
     events = result["events"]
+    timed = []
+    for ev in events:
+        try:
+            s = dateparser.isoparse(ev["start"])
+            e = dateparser.isoparse(ev["end"])
+            timed.append((s, e, ev))
+        except (ValueError, TypeError):
+            continue
+
+    timed.sort(key=lambda x: x[0])
+
+    # Detect overlaps
     conflicts = []
-
-    # Sort by start time and check overlaps
-    timed_events = [e for e in events if not e["is_all_day"] and e["start"]]
-    timed_events.sort(key=lambda e: e["start"])
-
-    for i in range(len(timed_events)):
-        for j in range(i + 1, len(timed_events)):
-            e1 = timed_events[i]
-            e2 = timed_events[j]
-
-            e1_end = e1["end"]
-            e2_start = e2["start"]
-
-            if e1_end > e2_start:
+    for i in range(len(timed)):
+        for j in range(i + 1, len(timed)):
+            s1, e1, ev1 = timed[i]
+            s2, e2, ev2 = timed[j]
+            if s2 >= e1:
+                break
+            overlap_end = min(e1, e2)
+            overlap_start = max(s1, s2)
+            overlap_mins = int((overlap_end - overlap_start).total_seconds() / 60)
+            if overlap_mins > 0:
+                overlap_count = sum(1 for (si, ei, _) in timed if si <= s2 < ei)
                 conflicts.append({
-                    "event_1": e1["summary"],
-                    "event_1_time": f"{e1['start']} - {e1['end']}",
-                    "event_2": e2["summary"],
-                    "event_2_time": f"{e2['start']} - {e2['end']}",
-                    "severity": "critical" if _count_overlaps_at(timed_events, e2["start"]) >= 3 else "warning",
+                    "event1": ev1["summary"],
+                    "event2": ev2["summary"],
+                    "overlap_minutes": overlap_mins,
+                    "event1_time": ev1["start"],
+                    "event2_time": ev2["start"],
+                    "severity": "critical" if overlap_count >= 3 else "warning",
                 })
 
-    # Check for back-to-back meetings (>3 consecutive)
-    back_to_back_chains = _find_back_to_back(timed_events)
+    # Back-to-back chains (3+ meetings with <=5 min gap)
+    back_to_back = []
+    current_block = []
+    for i, (s, e, ev) in enumerate(timed):
+        if not current_block:
+            current_block.append(ev)
+            continue
+        prev_end = timed[i - 1][1]
+        gap = (s - prev_end).total_seconds() / 60
+        if gap <= 5:
+            current_block.append(ev)
+        else:
+            if len(current_block) >= 3:
+                back_to_back.append({
+                    "count": len(current_block),
+                    "events": [e["summary"] for e in current_block],
+                    "warning": f"{len(current_block)} back-to-back meetings — meeting fatigue risk",
+                })
+            current_block = [ev]
+    if len(current_block) >= 3:
+        back_to_back.append({
+            "count": len(current_block),
+            "events": [e["summary"] for e in current_block],
+            "warning": f"{len(current_block)} back-to-back meetings — meeting fatigue risk",
+        })
 
-    # Check for dead time (gaps < 30 min between meetings)
-    dead_time = _find_dead_time(timed_events)
+    # Dead time (gaps < 30 min)
+    dead_time = []
+    for i in range(len(timed) - 1):
+        _, e1, ev1 = timed[i]
+        s2, _, ev2 = timed[i + 1]
+        gap_mins = int((s2 - e1).total_seconds() / 60)
+        if 0 < gap_mins < 30:
+            dead_time.append({
+                "after_event": ev1["summary"],
+                "before_event": ev2["summary"],
+                "gap_minutes": gap_mins,
+            })
 
     return {
         "conflicts": conflicts,
         "conflict_count": len(conflicts),
-        "back_to_back_warnings": back_to_back_chains,
+        "back_to_back_warnings": back_to_back,
         "dead_time_gaps": dead_time,
-        "total_events_checked": len(timed_events),
+        "total_events_checked": len(timed),
         "time_range": time_range,
+        "events_text": result["events_text"],
     }
 
 
-def _count_overlaps_at(events: list, time_str: str) -> int:
-    """Count how many events overlap at a given time."""
-    count = 0
-    for e in events:
-        if e["start"] <= time_str < e["end"]:
-            count += 1
-    return count
+# Protected event keywords — never suggest removing these
+PROTECTED_KEYWORDS = frozenset([
+    "deep work", "focus time", "creative block", "focus", "deep", "creative",
+    "morning routine", "family", "kids", "pickup", "drop-off", "dropoff",
+])
+
+# Low-priority / moveable keywords — candidates for shifting
+MOVEABLE_KEYWORDS = frozenset([
+    "1:1", "sync", "standup", "stand-up", "check-in", "checkin",
+    "optional", "office hours", "social", "lunch",
+])
 
 
-def _find_back_to_back(events: list) -> list:
-    """Find chains of 3+ back-to-back meetings (< 15 min gap)."""
-    chains = []
-    current_chain = [events[0]] if events else []
+def _is_protected(summary: str) -> bool:
+    """Check if an event is protected based on brain rules."""
+    lower = summary.lower()
+    return any(kw in lower for kw in PROTECTED_KEYWORDS)
 
-    for i in range(1, len(events)):
-        prev_end = events[i - 1]["end"]
-        curr_start = events[i]["start"]
 
-        try:
-            gap_minutes = (
-                datetime.fromisoformat(curr_start.replace("Z", "+00:00"))
-                - datetime.fromisoformat(prev_end.replace("Z", "+00:00"))
-            ).total_seconds() / 60
-        except (ValueError, TypeError):
-            current_chain = [events[i]]
-            continue
+def _is_moveable(summary: str) -> bool:
+    """Check if an event is likely moveable."""
+    lower = summary.lower()
+    return any(kw in lower for kw in MOVEABLE_KEYWORDS)
 
-        if gap_minutes <= 15:
-            current_chain.append(events[i])
+
+def suggest_optimizations(focus: str = "general") -> dict:
+    """Suggest specific schedule optimizations based on calendar data and brain rules.
+
+    Args:
+        focus: What to optimize for — 'deep work', 'meeting consolidation',
+               'travel prep', 'general'. Defaults to 'general'.
+
+    Returns:
+        Dictionary with optimization suggestions, moveable events, and protected events.
+    """
+    conflicts_result = find_conflicts(time_range="this week")
+    if conflicts_result.get("error"):
+        return conflicts_result
+
+    events_result = get_calendar_events(time_range="this week")
+    events = events_result.get("events", [])
+
+    suggestions = []
+    moveable_events = []
+    protected_events = []
+
+    # Classify events
+    for ev in events:
+        summary = ev.get("summary", "")
+        if _is_protected(summary):
+            protected_events.append(summary)
+        elif _is_moveable(summary):
+            moveable_events.append(summary)
+
+    # Suggestion: resolve conflicts by moving low-priority events
+    for conflict in conflicts_result.get("conflicts", []):
+        ev1, ev2 = conflict["event1"], conflict["event2"]
+        if _is_moveable(ev1) and not _is_moveable(ev2):
+            suggestions.append({
+                "action": "move",
+                "event": ev1,
+                "reason": f"Conflicts with {ev2} — {ev1} is lower priority and could shift",
+            })
+        elif _is_moveable(ev2) and not _is_moveable(ev1):
+            suggestions.append({
+                "action": "move",
+                "event": ev2,
+                "reason": f"Conflicts with {ev1} — {ev2} is lower priority and could shift",
+            })
         else:
-            if len(current_chain) >= 3:
-                chains.append({
-                    "count": len(current_chain),
-                    "events": [e["summary"] for e in current_chain],
-                    "warning": f"Meeting fatigue alert: {len(current_chain)} consecutive meetings",
-                })
-            current_chain = [events[i]]
-
-    if len(current_chain) >= 3:
-        chains.append({
-            "count": len(current_chain),
-            "events": [e["summary"] for e in current_chain],
-            "warning": f"Meeting fatigue alert: {len(current_chain)} consecutive meetings",
-        })
-
-    return chains
-
-
-def _find_dead_time(events: list) -> list:
-    """Find gaps between events that are too short to be useful (< 30 min)."""
-    dead_gaps = []
-
-    for i in range(1, len(events)):
-        prev_end = events[i - 1]["end"]
-        curr_start = events[i]["start"]
-
-        try:
-            gap_minutes = (
-                datetime.fromisoformat(curr_start.replace("Z", "+00:00"))
-                - datetime.fromisoformat(prev_end.replace("Z", "+00:00"))
-            ).total_seconds() / 60
-        except (ValueError, TypeError):
-            continue
-
-        if 0 < gap_minutes < 30:
-            dead_gaps.append({
-                "between": f"{events[i-1]['summary']} → {events[i]['summary']}",
-                "gap_minutes": round(gap_minutes),
-                "suggestion": "Too short for deep work. Consider merging adjacent meetings or extending a break.",
+            suggestions.append({
+                "action": "reschedule",
+                "event": f"{ev1} or {ev2}",
+                "reason": f"Both overlap by {conflict['overlap_minutes']} minutes — one needs to move",
             })
 
-    return dead_gaps
+    # Suggestion: fill dead time by shifting nearby moveable events
+    for gap in conflicts_result.get("dead_time_gaps", []):
+        after = gap["after_event"]
+        before = gap["before_event"]
+        if _is_moveable(before):
+            suggestions.append({
+                "action": "shift",
+                "event": before,
+                "reason": f"{gap['gap_minutes']} min dead time after {after} — shift {before} earlier to consolidate",
+            })
+
+    # Suggestion: break up back-to-back blocks
+    for b2b in conflicts_result.get("back_to_back_warnings", []):
+        moveable_in_block = [e for e in b2b["events"] if _is_moveable(e)]
+        if moveable_in_block:
+            suggestions.append({
+                "action": "reschedule",
+                "event": moveable_in_block[0],
+                "reason": f"Part of a {b2b['count']}-meeting back-to-back chain — move to create a break",
+            })
+
+    # Focus-specific suggestions
+    focus_lower = focus.lower()
+    if "deep work" in focus_lower:
+        # Check if mornings (10am-12pm peak energy) are meeting-free
+        timed = []
+        for ev in events:
+            try:
+                s = dateparser.isoparse(ev["start"])
+                timed.append((s, ev))
+            except (ValueError, TypeError):
+                continue
+        morning_meetings = [
+            ev["summary"] for s, ev in timed
+            if 10 <= s.hour < 12 and not _is_protected(ev["summary"])
+        ]
+        if morning_meetings:
+            suggestions.append({
+                "action": "block",
+                "event": "10am-12pm peak energy window",
+                "reason": f"Morning has {len(morning_meetings)} meetings ({', '.join(morning_meetings[:3])}) — protect this window for deep work",
+            })
+
+    elif "meeting" in focus_lower or "consolidat" in focus_lower:
+        suggestions.append({
+            "action": "consolidate",
+            "event": "scattered meetings",
+            "reason": "Group all moveable meetings into afternoon blocks to free morning for focus",
+        })
+
+    return {
+        "suggestions": suggestions,
+        "suggestion_count": len(suggestions),
+        "moveable_events": moveable_events,
+        "protected_events": protected_events,
+        "focus": focus,
+        "events_text": events_result.get("events_text", ""),
+        "total_events": len(events),
+    }

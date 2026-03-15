@@ -6,14 +6,13 @@ queries the calendar, and speaks back analysis.
 """
 
 import asyncio
-import os
 import json
-import traceback
+import sys
 
 from google import genai
 from google.genai import types
 
-from .calendar_tools import get_calendar_events, find_conflicts
+from .calendar_tools import get_calendar_events, find_conflicts, suggest_optimizations
 
 # Tool declarations for the Live API (function calling)
 TOOL_DECLARATIONS = types.Tool(
@@ -40,6 +39,19 @@ TOOL_DECLARATIONS = types.Tool(
                     "time_range": types.Schema(
                         type=types.Type.STRING,
                         description="Time range to check for conflicts",
+                    ),
+                },
+            ),
+        ),
+        types.FunctionDeclaration(
+            name="suggest_optimizations",
+            description="Suggest specific schedule optimizations — moves, shifts, blocks — based on analysis rules. Use when the user asks for recommendations, how to improve their schedule, or what to change.",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "focus": types.Schema(
+                        type=types.Type.STRING,
+                        description="What to optimize for: 'deep work', 'meeting consolidation', 'travel prep', 'general'",
                     ),
                 },
             ),
@@ -72,19 +84,17 @@ Schedule Analysis Rules:
 Always end with an offer to dig deeper: "Want me to look at a specific day?" or "Should I check for conflicts?"
 """
 
-# Map tool names to actual functions
 TOOL_FUNCTIONS = {
     "get_calendar_events": get_calendar_events,
     "find_conflicts": find_conflicts,
+    "suggest_optimizations": suggest_optimizations,
 }
 
 
 async def handle_tool_call(function_call):
     """Execute a tool call and return the result."""
     name = function_call.name
-    args = {}
-    if function_call.args:
-        args = dict(function_call.args)
+    args = dict(function_call.args) if function_call.args else {}
 
     func = TOOL_FUNCTIONS.get(name)
     if not func:
@@ -95,6 +105,36 @@ async def handle_tool_call(function_call):
         return result
     except Exception as e:
         return {"error": f"Tool execution failed: {str(e)}"}
+
+
+async def _process_session_response(session):
+    """Process responses from the Live API session, handling tool calls."""
+    async for message in session.receive():
+        if message.tool_call:
+            for fc in message.tool_call.function_calls:
+                print(f"  🔧 Calling {fc.name}...")
+                result = await handle_tool_call(fc)
+
+                await session.send_tool_response(
+                    function_responses=[
+                        types.FunctionResponse(
+                            name=fc.name,
+                            response=result,
+                        )
+                    ]
+                )
+            continue
+
+        if message.server_content:
+            if message.server_content.model_turn:
+                for part in message.server_content.model_turn.parts:
+                    if part.text:
+                        print(f"  📅 Analyst: {part.text}")
+                    if part.inline_data:
+                        print(f"  🔊 [Audio response: {len(part.inline_data.data)} bytes]")
+
+            if message.server_content.turn_complete:
+                break
 
 
 async def run_voice_agent():
@@ -110,7 +150,7 @@ async def run_voice_agent():
         speech_config=types.SpeechConfig(
             voice_config=types.VoiceConfig(
                 prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                    voice_name="Kore"  # Warm, professional voice
+                    voice_name="Kore"
                 )
             )
         ),
@@ -127,7 +167,6 @@ async def run_voice_agent():
         print("✅ Connected! Speak or type your schedule questions.")
         print("Type 'quit' to exit.\n")
 
-        # Send an initial greeting prompt
         await session.send_client_content(
             turns=types.Content(
                 role="user",
@@ -136,10 +175,8 @@ async def run_voice_agent():
             turn_complete=True,
         )
 
-        # Process the response
         await _process_session_response(session)
 
-        # Interactive loop
         while True:
             try:
                 user_input = await asyncio.get_event_loop().run_in_executor(
@@ -165,41 +202,6 @@ async def run_voice_agent():
             )
 
             await _process_session_response(session)
-
-
-async def _process_session_response(session):
-    """Process responses from the Live API session, handling tool calls."""
-    async for message in session.receive():
-        # Handle tool calls
-        if message.tool_call:
-            for fc in message.tool_call.function_calls:
-                print(f"  🔧 Calling {fc.name}...")
-                result = await handle_tool_call(fc)
-
-                # Send tool result back to the model
-                await session.send_tool_response(
-                    function_responses=[
-                        types.FunctionResponse(
-                            name=fc.name,
-                            response=result,
-                        )
-                    ]
-                )
-            # Continue receiving after sending tool response
-            continue
-
-        # Handle server content (text or audio)
-        if message.server_content:
-            if message.server_content.model_turn:
-                for part in message.server_content.model_turn.parts:
-                    if part.text:
-                        print(f"  📅 Analyst: {part.text}")
-                    if part.inline_data:
-                        # Audio data — in a real app, play this through speakers
-                        print(f"  🔊 [Audio response: {len(part.inline_data.data)} bytes]")
-
-            if message.server_content.turn_complete:
-                break
 
 
 async def run_text_agent():
@@ -254,7 +256,6 @@ async def run_text_agent():
 
 def main():
     """Entry point — run voice agent, fall back to text mode."""
-    import sys
     mode = sys.argv[1] if len(sys.argv) > 1 else "text"
 
     if mode == "voice":
