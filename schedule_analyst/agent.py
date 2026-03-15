@@ -21,7 +21,7 @@ from .calendar_tools import get_calendar_events, find_conflicts, suggest_optimiz
 # Model config: text model for generateContent, native audio for bidiGenerateContent (Live API)
 # No single model supports both — gemini-2.5-flash supports text, native-audio supports live.
 TEXT_MODEL = os.environ.get("SCHEDULE_ANALYST_MODEL", "gemini-2.5-flash")
-LIVE_MODEL = os.environ.get("SCHEDULE_ANALYST_LIVE_MODEL", "gemini-2.5-flash-native-audio-latest")
+LIVE_MODEL = os.environ.get("SCHEDULE_ANALYST_LIVE_MODEL", "gemini-2.5-flash-native-audio")
 
 
 class DualModelGemini(Gemini):
