@@ -2,7 +2,7 @@
 
 import unittest
 from unittest.mock import patch, MagicMock
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from schedule_analyst.calendar_tools import (
     _parse_time_range,
@@ -27,7 +27,7 @@ class TestParseTimeRange(unittest.TestCase):
 
     def test_tomorrow(self):
         start, end = _parse_time_range("tomorrow")
-        now = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        now = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         expected_start = now + timedelta(days=1)
         self.assertEqual(start.day, expected_start.day)
         self.assertEqual((end - start).days, 1)

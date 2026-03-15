@@ -139,8 +139,8 @@ def get_calendar_events(time_range: str = "this week") -> dict:
             service.events()
             .list(
                 calendarId="primary",
-                timeMin=start_dt.isoformat() + "Z",
-                timeMax=end_dt.isoformat() + "Z",
+                timeMin=start_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                timeMax=end_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 maxResults=50,
                 singleEvents=True,
                 orderBy="startTime",
