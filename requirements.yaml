@@ -161,7 +161,7 @@ requirements:
 
   - id: cal-004
     name: "Update/move events"
-    status: "In Progress"
+    status: "Completed"
     priority: "MVP"
     eval_driven: true
     description: |
@@ -176,13 +176,14 @@ requirements:
       - "Assert: event is actually moved in Google Calendar"
       - "Say: 'What's on Thursday now?' — assert moved event shows at new time"
     implementation_status:
-      implemented: false
-      tested: false
-      test_count: 0
+      implemented: true
+      tested: true
+      test_count: 1
+      notes: "Verified ADK web UI: 'Move Morning Standup to 8:30 AM' → get_calendar_events + update_event → round-trip confirmed via Google Calendar MCP. All assertions PASS."
 
   - id: cal-005
     name: "Delete events"
-    status: "In Progress"
+    status: "Completed"
     priority: "MVP"
     eval_driven: true
     description: |
@@ -197,13 +198,14 @@ requirements:
       - "Assert: duplicate events are removed from Google Calendar"
       - "Say: 'What's on Sunday now?' — assert duplicates gone"
     implementation_status:
-      implemented: false
-      tested: false
-      test_count: 0
+      implemented: true
+      tested: true
+      test_count: 2
+      notes: "Verified ADK web UI: 'Delete Team Happy Hour' + 'Delete Ski Trip Packing' → get_calendar_events + delete_event → round-trip confirmed event removed via Google Calendar MCP. All assertions PASS."
 
   - id: cal-006
     name: "Create events"
-    status: "In Progress"
+    status: "Completed"
     priority: "MVP"
     eval_driven: true
     description: |
@@ -218,9 +220,10 @@ requirements:
       - "Assert: event appears in Google Calendar"
       - "Say: 'What's on Thursday evening?' — assert packing block shows"
     implementation_status:
-      implemented: false
-      tested: false
-      test_count: 0
+      implemented: true
+      tested: true
+      test_count: 2
+      notes: "Verified ADK web UI: 'Create Buffer Time at 11:30 AM' + 'Create Ski Trip Packing at 7 PM' → create_event → round-trip confirmed on Gemini Live Hackathon Demo Calendar via Google Calendar MCP. All assertions PASS."
 
   # ═══ UI COMPONENTS ═══
 
@@ -299,6 +302,196 @@ requirements:
       tested: true
       test_count: 0
       notes: "Transcript panel with role-colored entries (user=blue, agent=teal, system=grey), timestamps, auto-scroll. Browser-tested on Cloud Run."
+
+  # ═══ PROTOTYPE-DERIVED FEATURES ═══
+
+  - id: ui-004
+    name: "Summary banner with confidence score"
+    status: "Not Started"
+    priority: "MVP"
+    eval_driven: false
+    description: |
+      Top banner showing natural language summary with highlighted metrics
+      ("Found 3 conflicts, 2 trip prep gaps, 4 optimization opportunities")
+      plus a confidence/alignment arc score (SVG ring).
+    acceptance_criteria:
+      - "Summary banner renders above the grid"
+      - "Metric counts (conflicts, gaps, optimizations) are highlighted in category colors"
+      - "Confidence score displayed as SVG ring with percentage"
+    test_steps:
+      - "Open UI in Chrome"
+      - "Assert: summary text visible above grid with colored metric highlights"
+      - "Assert: confidence ring shows a percentage value"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
+  - id: ui-005
+    name: "Read Aloud button — agent narrates the report"
+    status: "Not Started"
+    priority: "Could Have"
+    eval_driven: false
+    description: |
+      Button on the report header that triggers the agent to speak the
+      summary aloud via Gemini native audio. Demonstrates voice capability
+      without requiring the user to speak first.
+    acceptance_criteria:
+      - "Read Aloud button visible on report header"
+      - "Click triggers agent to speak the summary via audio output"
+      - "Orb transitions to speaking state during narration"
+    test_steps:
+      - "Open UI, click Read Aloud"
+      - "Assert: agent speaks the summary aloud"
+      - "Assert: orb shows speaking state (teal)"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
+  - id: ui-006
+    name: "Phase transition — Report → Voice Grooming"
+    status: "Not Started"
+    priority: "MVP"
+    eval_driven: false
+    description: |
+      Header badge transitions from "Phase 1: Report" (blue) to
+      "Phase 2: Voice Grooming" (teal) when voice mode activates.
+      Shows the two-phase interaction pattern.
+    acceptance_criteria:
+      - "Badge shows 'Phase 1: Report' on initial load (blue)"
+      - "Badge transitions to 'Phase 2: Voice Grooming' when voice starts (teal)"
+    test_steps:
+      - "Open UI → assert Phase 1: Report badge visible"
+      - "Start voice interaction → assert badge changes to Phase 2: Voice Grooming"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
+  - id: ui-007
+    name: "Barge-in / interrupt indicator"
+    status: "Not Started"
+    priority: "MVP"
+    eval_driven: true
+    description: |
+      When user speaks while agent is speaking (barge-in), visual flash
+      indicates the interrupt was detected. Agent stops and listens.
+      Competition judges specifically score interrupt handling.
+    acceptance_criteria:
+      - "Clicking orb while agent is speaking triggers barge-in"
+      - "Visual flash (rose) indicates interrupt detected"
+      - "Agent stops speaking and transitions to listening"
+      - "Transcript shows '[User interrupted]' marker"
+    test_steps:
+      - "Start a voice interaction where agent is speaking"
+      - "Click the orb mid-speech"
+      - "Assert: rose flash visible on the voice bar"
+      - "Assert: agent stops speaking, orb transitions to listening"
+      - "Assert: transcript shows interrupt marker"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
+  - id: ui-008
+    name: "Emotion tag on agent responses"
+    status: "Not Started"
+    priority: "Nice to Have"
+    eval_driven: false
+    description: |
+      Small badge on agent messages showing detected emotional tone
+      (e.g., "Confident", "Cautious", "Urgent"). Demonstrates native
+      audio model's emotion understanding.
+    acceptance_criteria:
+      - "Agent messages in transcript show an emotion tag badge"
+      - "Emotion reflects the content tone (conflicts = urgent, optimizations = confident)"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
+  - id: ui-010
+    name: "Voice-to-grid row highlighting"
+    status: "Not Started"
+    priority: "Should Have"
+    eval_driven: false
+    description: |
+      When the agent references a specific recommendation during voice,
+      the corresponding grid row highlights with a blue left border
+      (class highlight-voice). Shows voice and visual are connected.
+    acceptance_criteria:
+      - "When agent discusses a specific recommendation, that grid row highlights"
+      - "Highlight uses blue left border (Gemini accent color)"
+      - "Highlight clears when agent moves to a different topic"
+    test_steps:
+      - "During voice conversation, agent mentions 'triple-booked Sunday'"
+      - "Assert: row-1 (Sunday conflict) gets highlight-voice class"
+      - "Agent moves to next topic → assert highlight moves"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
+  - id: ui-011
+    name: "Session stats footer"
+    status: "Not Started"
+    priority: "Nice to Have"
+    eval_driven: false
+    description: |
+      Bottom bar showing session timer, actions completed count, and
+      intentions filed count.
+    acceptance_criteria:
+      - "Session timer counts up (MM:SS)"
+      - "Actions counter shows X/9 accepted"
+      - "Intents counter shows filed intentions"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
+  - id: ui-012
+    name: "Keyboard shortcuts (Space, M, P)"
+    status: "Not Started"
+    priority: "Should Have"
+    eval_driven: false
+    description: |
+      Keyboard shortcuts for hands-free operation during demo.
+      Space = next step, M = mute mic, P = pause.
+    acceptance_criteria:
+      - "Space bar advances demo / toggles voice"
+      - "M key toggles mic mute"
+      - "P key toggles pause"
+      - "Arrow right advances demo"
+    test_steps:
+      - "Press Space → assert demo advances or voice toggles"
+      - "Press M → assert mic mutes (rose indicator)"
+      - "Press P → assert pause state (amber indicator)"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
+  - id: ui-013
+    name: "Discuss with Athena button"
+    status: "Not Started"
+    priority: "Could Have"
+    eval_driven: false
+    description: |
+      Button on the grid report footer that transitions from report
+      viewing to voice conversation mode. Alternative to Accept All.
+    acceptance_criteria:
+      - "Button visible in grid report footer alongside Accept All"
+      - "Click transitions to voice mode (Phase 2)"
+      - "Agent speaks an invitation to discuss the recommendations"
+    test_steps:
+      - "Click 'Discuss with Athena'"
+      - "Assert: phase badge changes to Voice Grooming"
+      - "Assert: agent begins speaking"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
 
   # ═══ DEPLOYMENT ═══
 
@@ -389,7 +582,7 @@ requirements:
 
   - id: comp-003
     name: "GCP deployment proof"
-    status: "Not Started"
+    status: "Completed"
     priority: "MVP"
     eval_driven: false
     description: |
@@ -398,8 +591,8 @@ requirements:
       - "Screen recording of Cloud Run console showing the service, OR"
       - "Code file showing Cloud Run/Vertex AI API usage"
     implementation_status:
-      implemented: false
-      tested: false
+      implemented: true
+      tested: true
       test_count: 0
 
   - id: comp-004
