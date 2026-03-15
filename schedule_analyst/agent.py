@@ -16,7 +16,10 @@ from google.adk.models.llm_request import LlmRequest
 from google.adk.models.base_llm import BaseLlmConnection
 from google.genai import types
 
-from .calendar_tools import get_calendar_events, find_conflicts, suggest_optimizations
+from .calendar_tools import (
+    get_calendar_events, find_conflicts, suggest_optimizations,
+    update_event, delete_event, create_event,
+)
 
 # Model config: text model for generateContent, native audio for bidiGenerateContent (Live API)
 # No single model supports both — gemini-2.5-flash supports text, native-audio supports live.
@@ -69,6 +72,15 @@ You help users understand and optimize their schedules by analyzing their Google
 
 {BRAIN_RULES}
 
+## Calendar Actions
+You can READ events, FIND conflicts, and SUGGEST optimizations. You can also WRITE to the calendar:
+- **update_event**: Move or rename an existing event (requires event_id from get_calendar_events)
+- **delete_event**: Remove a duplicate or cancelled event (requires event_id)
+- **create_event**: Add a new block (focus time, packing, transit, buffer breaks)
+
+When the user approves a recommendation, execute it immediately using the appropriate write tool.
+Always confirm what you did after executing: "Done — moved your team sync to 2 PM" not just "Updated."
+
 ## Response Style
 - Start with a brief headline: "Your week looks pretty packed" or "Tomorrow is clear with one conflict"
 - Then give specifics with clear recommendations
@@ -92,7 +104,10 @@ root_agent = Agent(
     ),
     description="Voice-first calendar analyst that speaks schedule insights, conflicts, and optimization suggestions",
     instruction=SYSTEM_INSTRUCTION,
-    tools=[get_calendar_events, find_conflicts, suggest_optimizations],
+    tools=[
+        get_calendar_events, find_conflicts, suggest_optimizations,
+        update_event, delete_event, create_event,
+    ],
     generate_content_config=types.GenerateContentConfig(
         temperature=0.7,
         safety_settings=[

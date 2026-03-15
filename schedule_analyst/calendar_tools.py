@@ -20,7 +20,7 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from dateutil import parser as dateparser
 
-SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
+SCOPES = ["https://www.googleapis.com/auth/calendar"]
 TOKEN_PATH = os.path.join(os.path.dirname(__file__), "..", "token.json")
 
 # Calendar ID — configurable via env var, defaults to "primary"
@@ -422,3 +422,119 @@ def suggest_optimizations(focus: str = "general", time_range: str = "next 7 days
         "events_text": events_result.get("events_text", ""),
         "total_events": len(events),
     }
+
+
+# ═══════════════════════════════════════════════════════════════
+# WRITE TOOLS — Calendar mutations (require calendar scope)
+# ═══════════════════════════════════════════════════════════════
+
+
+def update_event(event_id: str, summary: str = "", start_time: str = "", end_time: str = "") -> dict:
+    """Update an existing calendar event — move it, rename it, or both.
+
+    Args:
+        event_id: The Google Calendar event ID to update.
+        summary: New title for the event. Leave empty to keep current title.
+        start_time: New start time in ISO 8601 format (e.g., '2026-03-16T14:00:00-04:00').
+                    Leave empty to keep current start time.
+        end_time: New end time in ISO 8601 format. Leave empty to keep current end time.
+
+    Returns:
+        Dictionary with updated event details or error message.
+    """
+    try:
+        service = _get_calendar_service()
+
+        # Fetch current event first
+        event = service.events().get(calendarId=CALENDAR_ID, eventId=event_id).execute()
+
+        # Apply changes
+        if summary:
+            event["summary"] = summary
+
+        if start_time:
+            event["start"] = {"dateTime": start_time}
+        if end_time:
+            event["end"] = {"dateTime": end_time}
+
+        updated = service.events().update(
+            calendarId=CALENDAR_ID, eventId=event_id, body=event
+        ).execute()
+
+        return {
+            "success": True,
+            "action": "updated",
+            "event_id": updated["id"],
+            "summary": updated.get("summary", ""),
+            "start": updated["start"].get("dateTime", updated["start"].get("date", "")),
+            "end": updated["end"].get("dateTime", updated["end"].get("date", "")),
+            "link": updated.get("htmlLink", ""),
+        }
+    except Exception as e:
+        return {"success": False, "error": f"Failed to update event: {str(e)}"}
+
+
+def delete_event(event_id: str) -> dict:
+    """Delete a calendar event by its ID. Use this for removing duplicates or cancelled meetings.
+
+    Args:
+        event_id: The Google Calendar event ID to delete.
+
+    Returns:
+        Dictionary confirming deletion or error message.
+    """
+    try:
+        service = _get_calendar_service()
+
+        # Fetch event details before deleting (for confirmation)
+        event = service.events().get(calendarId=CALENDAR_ID, eventId=event_id).execute()
+        event_summary = event.get("summary", "(No title)")
+
+        service.events().delete(calendarId=CALENDAR_ID, eventId=event_id).execute()
+
+        return {
+            "success": True,
+            "action": "deleted",
+            "event_id": event_id,
+            "deleted_summary": event_summary,
+        }
+    except Exception as e:
+        return {"success": False, "error": f"Failed to delete event: {str(e)}"}
+
+
+def create_event(summary: str, start_time: str, end_time: str, description: str = "") -> dict:
+    """Create a new calendar event. Use this for adding focus blocks, packing time, transit blocks, etc.
+
+    Args:
+        summary: Title of the new event (e.g., 'Deep Work Block', 'Travel to Airport').
+        start_time: Start time in ISO 8601 format (e.g., '2026-03-19T19:00:00-04:00').
+        end_time: End time in ISO 8601 format (e.g., '2026-03-19T20:00:00-04:00').
+        description: Optional description for the event.
+
+    Returns:
+        Dictionary with created event details or error message.
+    """
+    try:
+        service = _get_calendar_service()
+
+        event_body = {
+            "summary": summary,
+            "start": {"dateTime": start_time},
+            "end": {"dateTime": end_time},
+        }
+        if description:
+            event_body["description"] = description
+
+        created = service.events().insert(calendarId=CALENDAR_ID, body=event_body).execute()
+
+        return {
+            "success": True,
+            "action": "created",
+            "event_id": created["id"],
+            "summary": created.get("summary", ""),
+            "start": created["start"].get("dateTime", created["start"].get("date", "")),
+            "end": created["end"].get("dateTime", created["end"].get("date", "")),
+            "link": created.get("htmlLink", ""),
+        }
+    except Exception as e:
+        return {"success": False, "error": f"Failed to create event: {str(e)}"}
