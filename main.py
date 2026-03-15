@@ -149,7 +149,7 @@ def _generate_summary(events_result: dict, conflicts_result: dict | None, prompt
 Respond in natural, spoken language. No JSON. No bullet points unless explicitly asked. Keep it under 30 seconds of speaking time (~75 words)."""
 
         response = client.models.generate_content(
-            model="gemini-2.0-flash-001",
+            model="gemini-2.0-flash",
             contents=full_prompt,
         )
         return response.text
