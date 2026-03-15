@@ -208,6 +208,11 @@ def find_conflicts(time_range: str = "this week") -> dict:
         try:
             s = dateparser.isoparse(ev["start"])
             e = dateparser.isoparse(ev["end"])
+            # Normalize: make all datetimes timezone-aware (UTC) for comparison
+            if s.tzinfo is None:
+                s = s.replace(tzinfo=timezone.utc)
+            if e.tzinfo is None:
+                e = e.replace(tzinfo=timezone.utc)
             timed.append((s, e, ev))
         except (ValueError, TypeError):
             continue

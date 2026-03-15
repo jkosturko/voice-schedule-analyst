@@ -784,7 +784,7 @@
             renderGridBody();
 
             try {
-                const instruction = `Execute this calendar action: ${rec.title}. Details: ${rec.description}`;
+                const instruction = rec._action || `Execute this calendar action: ${rec.title}. Details: ${rec.description}`;
                 const res = await fetch(`${API_BASE}/schedule-analyst/question`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -861,14 +861,16 @@
                 // Conflicts → recommendations
                 if (data.conflicts && data.conflicts.length > 0) {
                     data.conflicts.forEach(c => {
+                        const dateStr = c.event1_time ? new Date(c.event1_time).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : '';
                         recommendations.push({
                             id: recId++,
                             category: 'conflicts',
-                            date: c.date || c.day || '',
+                            date: dateStr,
                             title: `${c.event1} vs ${c.event2}`,
-                            description: `${c.overlap_minutes || '?'}min overlap — resolve by moving or cancelling one.`,
+                            description: `${c.overlap_minutes || '?'}min overlap (${c.severity || 'warning'}) — resolve by moving or cancelling one.`,
                             rule_ref: 'R-01',
                             status: 'pending',
+                            _action: `Resolve conflict: "${c.event1}" overlaps with "${c.event2}" by ${c.overlap_minutes} minutes. Move or cancel one of them.`,
                         });
                     });
                 }
@@ -876,14 +878,16 @@
                 // Back-to-back warnings → optimizations
                 if (data.back_to_back && data.back_to_back.length > 0) {
                     data.back_to_back.forEach(b => {
+                        const eventNames = b.events ? b.events.join(', ') : '';
                         recommendations.push({
                             id: recId++,
                             category: 'optimizations',
-                            date: b.date || '',
-                            title: 'Back-to-back meeting block',
-                            description: b.warning || b.description || 'Add buffer between consecutive meetings.',
+                            date: '',
+                            title: `${b.count || ''} back-to-back meetings`,
+                            description: b.warning || 'Add buffer breaks between consecutive meetings.',
                             rule_ref: 'R-12',
                             status: 'pending',
+                            _action: `Add 15-minute buffer breaks between these back-to-back meetings: ${eventNames}`,
                         });
                     });
                 }
@@ -894,11 +898,12 @@
                         recommendations.push({
                             id: recId++,
                             category: 'optimizations',
-                            date: d.date || '',
-                            title: 'Dead time gap',
-                            description: d.description || d.gap || 'Short gap that could be used for a break or focus block.',
+                            date: '',
+                            title: `${d.gap_minutes}min gap: ${d.after_event} → ${d.before_event}`,
+                            description: `Short ${d.gap_minutes}-minute gap. Use for a break or extend adjacent block.`,
                             rule_ref: 'R-07',
                             status: 'pending',
+                            _action: `Fill the ${d.gap_minutes}-minute gap between "${d.after_event}" and "${d.before_event}" with a break or focus block.`,
                         });
                     });
                 }
