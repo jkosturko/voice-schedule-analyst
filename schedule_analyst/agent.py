@@ -48,7 +48,7 @@ You help users understand and optimize their schedules by analyzing their Google
 
 root_agent = Agent(
     name="schedule_analyst",
-    model="gemini-2.0-flash-live-001",
+    model="gemini-2.0-flash-live-001",  # Live API requires live-specific model
     description="Voice-first calendar analyst that speaks schedule insights, conflicts, and optimization suggestions",
     instruction=SYSTEM_INSTRUCTION,
     tools=[get_calendar_events, find_conflicts, suggest_optimizations],
