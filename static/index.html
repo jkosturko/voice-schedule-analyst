@@ -523,13 +523,14 @@
         }
 
         function handleLiveEvent(event) {
-            // Audio + text from model turn
+            // Audio chunks from model turn (ADK sends camelCase: inlineData)
             if (event.content?.parts) {
                 for (const part of event.content.parts) {
-                    if (part.text) pendingAgentText += part.text;
-                    if (part.inline_data?.data) {
+                    // Skip thought/reasoning text — only show spoken output
+                    const audioData = part.inlineData?.data || part.inline_data?.data;
+                    if (audioData) {
                         if (voiceState !== 'speaking') setVoiceState('speaking');
-                        enqueueAudio(part.inline_data.data);
+                        enqueueAudio(audioData);
                     }
                 }
             }
@@ -537,16 +538,27 @@
             // Alternative format: server_content.model_turn
             if (event.server_content?.model_turn?.parts) {
                 for (const part of event.server_content.model_turn.parts) {
-                    if (part.text) pendingAgentText += part.text;
-                    if (part.inline_data?.data) {
+                    const audioData = part.inlineData?.data || part.inline_data?.data;
+                    if (audioData) {
                         if (voiceState !== 'speaking') setVoiceState('speaking');
-                        enqueueAudio(part.inline_data.data);
+                        enqueueAudio(audioData);
                     }
                 }
             }
 
-            // Turn complete
-            if (event.turn_complete || event.server_content?.turn_complete) {
+            // Output transcription — the spoken text from native audio model
+            // partial=false is the final complete transcription — use it to replace accumulated text
+            if (event.outputTranscription?.text) {
+                if (event.partial === false) {
+                    // Final transcription — replace any accumulated partial text
+                    pendingAgentText = event.outputTranscription.text;
+                } else {
+                    pendingAgentText += event.outputTranscription.text;
+                }
+            }
+
+            // Turn complete — ADK uses camelCase: turnComplete
+            if (event.turnComplete || event.turn_complete || event.server_content?.turn_complete) {
                 if (pendingAgentText.trim()) {
                     addChatMessage('agent', pendingAgentText.trim());
                     addTranscriptLine('agent', pendingAgentText.trim());
@@ -555,11 +567,10 @@
                 if (!isPlaying) setVoiceState('listening');
             }
 
-            // Tool calls — show thinking state
-            if (event.actions || event.tool_call) {
+            // Tool calls — show thinking state (only when actual tool calls are present)
+            if (event.tool_call?.function_calls?.length) {
                 setVoiceState('thinking');
-                const calls = event.tool_call?.function_calls || [];
-                for (const fc of calls) {
+                for (const fc of event.tool_call.function_calls) {
                     addTranscriptLine('system', `Calling ${fc.name}...`);
                 }
             }
@@ -611,7 +622,11 @@
         }
 
         function base64ToArrayBuffer(base64) {
-            const binary = atob(base64);
+            // Convert URL-safe base64 (from Gemini) to standard base64
+            let std = base64.replace(/-/g, '+').replace(/_/g, '/');
+            // Add padding if needed
+            while (std.length % 4) std += '=';
+            const binary = atob(std);
             const bytes = new Uint8Array(binary.length);
             for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
             return bytes.buffer;
