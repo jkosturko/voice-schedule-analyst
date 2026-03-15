@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "voice-schedule-analyst"
+version = "0.1.0"
+description = "Voice-first calendar analyst powered by Google ADK and Gemini Live API"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.12"
+authors = [
+    {name = "Jessica Kosturko"},
+]
+keywords = ["gemini", "adk", "voice", "calendar", "schedule", "google-cloud"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Scheduling",
+]
+dependencies = [
+    "google-adk>=0.5.0",
+    "google-genai>=1.0.0",
+    "google-auth>=2.28.0",
+    "google-auth-oauthlib>=1.2.0",
+    "google-api-python-client>=2.120.0",
+    "flask>=3.0.0",
+    "gunicorn>=22.0.0",
+    "python-dateutil>=2.9.0",
+]
+
+[project.optional-dependencies]
+voice = ["pyaudio>=0.2.14"]
+dev = ["pytest>=8.0.0"]
+
+[project.scripts]
+schedule-analyst = "schedule_analyst.live_agent:main"
+
+[project.urls]
+Repository = "https://github.com/jkosturko/voice-schedule-analyst"
+
+[tool.setuptools.packages.find]
+include = ["schedule_analyst*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

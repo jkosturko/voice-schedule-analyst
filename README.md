@@ -74,48 +74,71 @@ A **voice-first calendar analyst** powered by Google ADK and the Gemini Live API
 
 ### Prerequisites
 
-- Python 3.12+
-- Google Cloud project with Calendar API enabled
-- Google GenAI API key (`GOOGLE_API_KEY`)
-- OAuth client credentials (`credentials.json`) for Calendar access
+| Requirement | How to Get It |
+|-------------|---------------|
+| Python 3.12+ | `python --version` — [install](https://www.python.org/downloads/) if needed |
+| Google Cloud project | [console.cloud.google.com](https://console.cloud.google.com) — create or select a project |
+| `GOOGLE_API_KEY` | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — create a Gemini API key |
+| Calendar API enabled | Cloud Console → APIs & Services → Enable "Google Calendar API" |
+| OAuth credentials | Cloud Console → APIs & Services → Credentials → Create OAuth 2.0 Client ID → Download JSON as `credentials.json` |
 
 ### Local Development
 
 ```bash
-# Clone and set up
+# 1. Clone and set up
 git clone https://github.com/jkosturko/voice-schedule-analyst.git
 cd voice-schedule-analyst
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# Configure
+# 2. Configure environment
 cp .env.example .env
-# Edit .env with your API key
+# Edit .env — set GOOGLE_API_KEY at minimum
 
-# Authorize Google Calendar (one-time — opens browser)
+# 3. Authorize Google Calendar (one-time — opens browser for OAuth consent)
 python -m schedule_analyst.auth
 
-# Run with ADK web UI
-adk web schedule_analyst
-
-# Or run the Live API agent (text mode)
-python -m schedule_analyst
-
-# Or run the HTTP server
-python main.py
+# 4. Run the agent (pick one):
+adk web schedule_analyst          # ADK web UI — best for development
+python -m schedule_analyst        # Live API — voice/text mode
+python main.py                    # HTTP server — for testing endpoints
 ```
 
 ### Deploy to Cloud Run
 
-```bash
-# Set your project
-export GOOGLE_CLOUD_PROJECT=your-project-id
+The deploy script handles everything: enables APIs, creates an Artifact Registry repo, builds via Cloud Build, and deploys to Cloud Run.
 
-# Deploy (builds + deploys in one step)
-./scripts/deploy.sh $GOOGLE_CLOUD_PROJECT us-east1
+```bash
+# Prerequisites: gcloud CLI installed + authenticated
+gcloud auth login
+gcloud config set project your-project-id
+
+# Set your API key (passed to Cloud Run as env var)
+export GOOGLE_API_KEY=your-gemini-api-key
+
+# Deploy in one command
+./scripts/deploy.sh your-project-id us-east1
+
+# The script outputs the service URL. Verify:
+curl https://your-service-url/health
 ```
 
-The deploy script enables required APIs, builds via Cloud Build, and deploys to Cloud Run.
+**What the deploy script does (5 steps):**
+1. Enables Cloud Run, Artifact Registry, Cloud Build, and Calendar APIs
+2. Creates a Docker repository in Artifact Registry (idempotent — safe to re-run)
+3. Builds the container image via Cloud Build
+4. Deploys to Cloud Run (512MB RAM, 120s timeout, auto-scaling 0→3 instances)
+5. Prints the service URL + example curl commands
+
+### Local Docker Testing
+
+```bash
+# Build and run locally (no GCP needed)
+./scripts/docker-build.sh
+
+# Or build only (no run)
+./scripts/docker-build.sh --build
+```
 
 ## API Endpoints
 
@@ -173,16 +196,25 @@ Voice name: **Kore** — warm and professional.
 
 ```
 voice-schedule-analyst/
-├── schedule_analyst/        # ADK agent package
-│   ├── agent.py            # Root agent definition (ADK entry point)
-│   ├── calendar_tools.py   # Google Calendar API tools
-│   ├── live_agent.py       # Gemini Live API voice interface
-│   └── auth.py             # OAuth helper for local setup
-├── brain/                   # Configurable analysis rules
-├── main.py                  # HTTP server for Cloud Run
-├── Dockerfile               # Container config
-├── scripts/deploy.sh        # Cloud Run deployment
-└── requirements.txt
+├── schedule_analyst/           # ADK agent package
+│   ├── __init__.py            # Exports root_agent for ADK discovery
+│   ├── __main__.py            # Entry point for `python -m schedule_analyst`
+│   ├── agent.py               # Root agent definition (ADK entry point)
+│   ├── calendar_tools.py      # Google Calendar API tools (3 functions)
+│   ├── live_agent.py          # Gemini Live API voice interface
+│   └── auth.py                # OAuth helper for local setup
+├── brain/
+│   └── schedule-analysis-rules.md  # Configurable analysis preferences
+├── tests/
+│   └── test_calendar_tools.py # 36 tests — fully mocked, no creds needed
+├── scripts/
+│   ├── deploy.sh              # One-command Cloud Run deployment
+│   └── docker-build.sh        # Local Docker build + run
+├── main.py                    # Flask HTTP server for Cloud Run
+├── Dockerfile                 # Production container (non-root, gunicorn)
+├── .dockerignore              # Lean build context
+├── .env.example               # Environment variable template
+└── requirements.txt           # Python dependencies
 ```
 
 ## Testing
