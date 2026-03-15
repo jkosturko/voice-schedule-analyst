@@ -81,6 +81,10 @@ TOOL_DECLARATIONS = types.Tool(
                         type=types.Type.STRING,
                         description="What to optimize for: 'deep work', 'meeting consolidation', 'travel prep', 'general'",
                     ),
+                    "time_range": types.Schema(
+                        type=types.Type.STRING,
+                        description="Time range to analyze: 'today', 'tomorrow', 'this week', 'next week', 'next 3 days', 'next 7 days'",
+                    ),
                 },
             ),
         ),

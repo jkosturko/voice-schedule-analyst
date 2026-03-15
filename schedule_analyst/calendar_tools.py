@@ -301,21 +301,22 @@ def _is_moveable(summary: str) -> bool:
     return any(kw in lower for kw in MOVEABLE_KEYWORDS)
 
 
-def suggest_optimizations(focus: str = "general") -> dict:
+def suggest_optimizations(focus: str = "general", time_range: str = "next 7 days") -> dict:
     """Suggest specific schedule optimizations based on calendar data and brain rules.
 
     Args:
         focus: What to optimize for — 'deep work', 'meeting consolidation',
                'travel prep', 'general'. Defaults to 'general'.
+        time_range: Time range to analyze. Defaults to 'next 7 days'.
 
     Returns:
         Dictionary with optimization suggestions, moveable events, and protected events.
     """
-    conflicts_result = find_conflicts(time_range="this week")
+    conflicts_result = find_conflicts(time_range=time_range)
     if conflicts_result.get("error"):
         return conflicts_result
 
-    events_result = get_calendar_events(time_range="this week")
+    events_result = get_calendar_events(time_range=time_range)
     events = events_result.get("events", [])
 
     suggestions = []
