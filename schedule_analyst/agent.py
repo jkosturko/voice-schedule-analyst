@@ -14,6 +14,11 @@ from google.genai import types
 
 from .calendar_tools import get_calendar_events, find_conflicts, suggest_optimizations
 
+# Model selection: native audio for Live API voice, text model for web/CLI
+# ADK web and adk run use generateContent which requires a text-capable model.
+# The live_agent.py pipeline uses the native audio model directly.
+AGENT_MODEL = os.environ.get("SCHEDULE_ANALYST_MODEL", "gemini-2.0-flash")
+
 # Load brain rules for dynamic system instruction
 BRAIN_PATH = os.path.join(os.path.dirname(__file__), "..", "brain", "schedule-analysis-rules.md")
 try:
@@ -34,7 +39,7 @@ You help users understand and optimize their schedules by analyzing their Google
 - Use time references humans understand: "tomorrow morning" not "2026-03-17T09:00:00"
 - When reporting conflicts, state both events and the overlap clearly
 - Never output raw JSON — always speak in sentences
-- Never leave template placeholders like {{{{event}}}} in your output
+- Never leave raw template placeholders in your output
 
 {BRAIN_RULES}
 
@@ -48,7 +53,7 @@ You help users understand and optimize their schedules by analyzing their Google
 
 root_agent = Agent(
     name="schedule_analyst",
-    model="gemini-2.5-flash-native-audio-latest",  # Gemini native audio for Live API
+    model=AGENT_MODEL,  # Default: gemini-2.0-flash (text); override via SCHEDULE_ANALYST_MODEL env var
     description="Voice-first calendar analyst that speaks schedule insights, conflicts, and optimization suggestions",
     instruction=SYSTEM_INSTRUCTION,
     tools=[get_calendar_events, find_conflicts, suggest_optimizations],
