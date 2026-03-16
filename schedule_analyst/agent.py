@@ -22,9 +22,11 @@ from .calendar_tools import (
 )
 
 # Model config: text model for generateContent, native audio for bidiGenerateContent (Live API)
-# No single model supports both — gemini-2.5-flash supports text, native-audio supports live.
+# Vertex AI and Gemini API use different model names for native audio.
+_USE_VERTEX = os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").lower() != "false"
 TEXT_MODEL = os.environ.get("SCHEDULE_ANALYST_MODEL", "gemini-2.5-flash")
-LIVE_MODEL = os.environ.get("SCHEDULE_ANALYST_LIVE_MODEL", "gemini-2.5-flash-native-audio-latest")
+_DEFAULT_LIVE = "gemini-live-2.5-flash-native-audio" if _USE_VERTEX else "gemini-2.5-flash-native-audio-latest"
+LIVE_MODEL = os.environ.get("LIVE_MODEL", _DEFAULT_LIVE)
 
 
 class DualModelGemini(Gemini):
