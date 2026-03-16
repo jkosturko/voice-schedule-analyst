@@ -919,7 +919,7 @@
                 const res = await fetch(`${API_BASE}/schedule-analyst/analyze`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ time_range: 'next 7 days' })
+                    body: JSON.stringify({ time_range: 'next 14 days' })
                 });
                 const data = await res.json();
 
@@ -1342,7 +1342,7 @@
         // ══════════════════════════════════════════════════════
         // ANALYZE (fetch full report)
         // ══════════════════════════════════════════════════════
-        async function fetchAnalysis(timeRange = 'next 7 days') {
+        async function fetchAnalysis(timeRange = 'next 14 days') {
             setVoiceState('thinking');
             addTranscriptLine('system', `Analyzing calendar: ${timeRange}`);
 

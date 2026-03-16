@@ -53,7 +53,7 @@ TOOL_DECLARATIONS = types.Tool(
                 properties={
                     "time_range": types.Schema(
                         type=types.Type.STRING,
-                        description="Time range: 'today', 'tomorrow', 'this week', 'next week', 'next 3 days', 'next 7 days'",
+                        description="Time range: 'today', 'tomorrow', 'this week', 'next week', 'next 3 days', 'next 14 days'",
                     ),
                 },
             ),
@@ -83,7 +83,7 @@ TOOL_DECLARATIONS = types.Tool(
                     ),
                     "time_range": types.Schema(
                         type=types.Type.STRING,
-                        description="Time range to analyze: 'today', 'tomorrow', 'this week', 'next week', 'next 3 days', 'next 7 days'",
+                        description="Time range to analyze: 'today', 'tomorrow', 'this week', 'next week', 'next 3 days', 'next 14 days'",
                     ),
                 },
             ),

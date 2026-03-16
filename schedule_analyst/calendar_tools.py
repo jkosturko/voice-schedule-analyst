@@ -547,7 +547,7 @@ def _is_moveable(summary: str) -> bool:
     return any(kw in lower for kw in MOVEABLE_KEYWORDS)
 
 
-def suggest_optimizations(focus: str = "general", time_range: str = "next 7 days") -> dict:
+def suggest_optimizations(focus: str = "general", time_range: str = "next 14 days") -> dict:
     """Suggest specific schedule optimizations based on calendar data and brain rules.
 
     Args:

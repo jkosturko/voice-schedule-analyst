@@ -4,136 +4,726 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Schedule Analyst — Architecture</title>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
+  :root {
+    --bg: #06060b;
+    --surface: #0d0d14;
+    --surface-raised: #12121c;
+    --border: #1a1a2e;
+    --border-glow: #2dd4bf30;
+    --text: #c8d2e0;
+    --text-dim: #5a6478;
+    --text-bright: #f0f4f8;
+    --teal: #2dd4bf;
+    --teal-dim: #1a9e8e;
+    --indigo: #818cf8;
+    --indigo-dim: #5b63d3;
+    --purple: #c084fc;
+    --purple-dim: #9057d4;
+    --blue: #60a5fa;
+    --amber: #f59e0b;
+    --amber-dim: #b37208;
+    --green: #34d399;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
   body {
-    background: #0a0a0f;
-    color: #e2e8f0;
-    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Outfit', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* Subtle grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(45, 212, 191, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(45, 212, 191, 0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Radial glow behind Cloud Run */
+  body::after {
+    content: '';
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 900px;
+    height: 900px;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(ellipse, rgba(45, 212, 191, 0.04) 0%, rgba(129, 140, 248, 0.02) 40%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page {
+    position: relative;
+    z-index: 1;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 3rem 2rem 4rem;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 3.5rem;
+  }
+
+  .header h1 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, var(--teal), var(--indigo));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+  }
+
+  .header .subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 400;
+    color: var(--text-dim);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  /* Architecture container */
+  .arch {
+    display: grid;
+    grid-template-rows: auto auto auto auto;
+    gap: 2rem;
+    position: relative;
+  }
+
+  /* ── Row: User ── */
+  .row-user {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+  }
+
+  /* ── Row: Cloud Run ── */
+  .cloud-run-wrapper {
+    position: relative;
+    border: 1px solid var(--teal);
+    border-radius: 16px;
+    padding: 2rem 2rem 1.5rem;
+    background: linear-gradient(180deg, rgba(45, 212, 191, 0.04) 0%, transparent 40%);
+    box-shadow: 0 0 40px rgba(45, 212, 191, 0.06), inset 0 1px 0 rgba(45, 212, 191, 0.1);
+  }
+
+  .cloud-run-wrapper::before {
+    content: '☁  GOOGLE CLOUD RUN';
+    position: absolute;
+    top: -10px;
+    left: 24px;
+    background: var(--bg);
+    padding: 0 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    color: var(--teal);
+  }
+
+  .cloud-run-inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  /* Sub-groups inside Cloud Run */
+  .group {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem 1.25rem 1rem;
+    position: relative;
+    background: var(--surface);
+  }
+
+  .group-label {
+    position: absolute;
+    top: -9px;
+    left: 16px;
+    background: var(--surface);
+    padding: 0 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .group--adk {
+    border-color: var(--indigo);
+    box-shadow: 0 0 20px rgba(129, 140, 248, 0.05);
+  }
+  .group--adk .group-label { color: var(--indigo); background: var(--surface); }
+
+  .group--server {
+    border-color: var(--blue);
+    box-shadow: 0 0 20px rgba(96, 165, 250, 0.05);
+  }
+  .group--server .group-label { color: var(--blue); background: var(--surface); }
+
+  .group--adk .nodes { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.5rem; }
+  .group--server .nodes { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.5rem; }
+
+  /* Policy node standalone */
+  .policy-node-wrapper {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: center;
+    margin-top: 0.25rem;
+  }
+
+  /* ── Row: Bottom ── */
+  .row-bottom {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2rem;
+    align-items: start;
+  }
+
+  .ui-wrapper {
+    border: 1px solid var(--teal-dim);
+    border-radius: 12px;
+    padding: 1.25rem;
+    background: linear-gradient(180deg, rgba(45, 212, 191, 0.03) 0%, transparent 60%);
+    position: relative;
+  }
+  .ui-wrapper::before {
+    content: 'CUSTOM UI';
+    position: absolute;
+    top: -9px;
+    left: 16px;
+    background: var(--bg);
+    padding: 0 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    color: var(--teal-dim);
+  }
+  .ui-nodes {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .gcal-wrapper {
+    display: flex;
+    align-items: center;
+  }
+
+  /* ── Nodes ── */
+  .node {
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.3s ease;
+  }
+
+  .node:hover {
+    transform: translateY(-2px);
+  }
+
+  .node-title {
+    font-weight: 600;
+    font-size: 0.82rem;
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .node-detail {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    line-height: 1.6;
+    opacity: 0.7;
+  }
+
+  /* Node color variants */
+  .node--user {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    min-width: 160px;
+  }
+  .node--user .node-title { color: var(--text-bright); }
+
+  .node--gemini-live {
+    background: linear-gradient(135deg, #1a0f2e, #2a1548);
+    border: 1px solid var(--purple);
+    box-shadow: 0 0 20px rgba(192, 132, 252, 0.1);
+  }
+  .node--gemini-live .node-title { color: var(--purple); }
+  .node--gemini-live:hover { box-shadow: 0 0 30px rgba(192, 132, 252, 0.2); }
+
+  .node--gemini-text {
+    background: linear-gradient(135deg, #111030, #1c1a50);
+    border: 1px solid var(--indigo);
+    box-shadow: 0 0 15px rgba(129, 140, 248, 0.08);
+  }
+  .node--gemini-text .node-title { color: var(--indigo); }
+
+  .node--tools {
+    background: var(--surface-raised);
+    border: 1px solid #334155;
+  }
+  .node--tools .node-title { color: var(--text-bright); }
+
+  .node--endpoint {
+    background: linear-gradient(135deg, #0c1a38, #132244);
+    border: 1px solid rgba(96, 165, 250, 0.4);
+    padding: 0.5rem 0.85rem;
+  }
+  .node--endpoint .node-title {
+    color: var(--blue);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+  }
+  .node--endpoint .node-detail { font-size: 0.58rem; }
+
+  .node--policy {
+    background: linear-gradient(135deg, #0a2018, #0f2e24);
+    border: 1px solid var(--teal-dim);
+    box-shadow: 0 0 20px rgba(45, 212, 191, 0.06);
+    max-width: 400px;
+  }
+  .node--policy .node-title { color: var(--teal); }
+
+  .node--gcal {
+    background: linear-gradient(135deg, #1c1408, #2a1e0a);
+    border: 1px solid var(--amber);
+    box-shadow: 0 0 25px rgba(245, 158, 11, 0.08);
+    min-width: 200px;
+  }
+  .node--gcal .node-title { color: var(--amber); }
+  .node--gcal:hover { box-shadow: 0 0 35px rgba(245, 158, 11, 0.15); }
+
+  .node--ui {
+    background: var(--surface);
+    border: 1px solid rgba(45, 212, 191, 0.25);
+    flex: 1;
+    min-width: 120px;
+  }
+  .node--ui .node-title { color: var(--teal); font-size: 0.78rem; }
+  .node--ui .node-detail { font-size: 0.58rem; }
+
+  /* ── Connection labels ── */
+  .connections {
+    display: flex;
+    justify-content: center;
+    gap: 3rem;
+    flex-wrap: wrap;
+    margin: 0.5rem 0;
+  }
+
+  .conn-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.58rem;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+
+  .conn-arrow {
+    display: inline-block;
+    width: 24px;
+    height: 1px;
+    position: relative;
+  }
+  .conn-arrow::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--text-dim);
+  }
+  .conn-arrow::after {
+    content: '';
+    position: absolute;
+    right: -1px;
+    top: -3px;
+    border: 3px solid transparent;
+    border-left: 5px solid var(--text-dim);
+  }
+  .conn-arrow--down {
+    width: 1px;
+    height: 20px;
+  }
+  .conn-arrow--down::before {
+    background: var(--text-dim);
+  }
+  .conn-arrow--down::after {
+    right: auto;
+    top: auto;
+    bottom: -1px;
+    left: -3px;
+    border: 3px solid transparent;
+    border-top: 5px solid var(--text-dim);
+    border-left: none;
+  }
+
+  /* Flow arrows between rows */
+  .flow-arrows {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 4rem;
+    padding: 0.25rem 0;
+  }
+
+  .flow-arrow {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    min-height: 100vh;
-    margin: 0;
-    padding: 2rem;
+    gap: 0.15rem;
   }
-  h1 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin-bottom: 0.25rem;
-    background: linear-gradient(135deg, #2dd4bf, #818cf8);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+
+  .flow-arrow .shaft {
+    width: 2px;
+    height: 28px;
+    position: relative;
+    overflow: visible;
   }
-  .subtitle {
-    color: #64748b;
-    font-size: 0.8rem;
-    margin-bottom: 2rem;
+
+  .flow-arrow .shaft::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 2px;
+    height: 100%;
+    background: linear-gradient(180deg, transparent, var(--teal-dim));
+  }
+
+  .flow-arrow .shaft::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: -3px;
+    border: 4px solid transparent;
+    border-top: 6px solid var(--teal-dim);
+  }
+
+  /* Animated pulse on shafts */
+  .flow-arrow .shaft .pulse {
+    position: absolute;
+    top: -4px;
+    left: -1px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--teal);
+    box-shadow: 0 0 6px var(--teal);
+    animation: flowPulse 2.5s ease-in-out infinite;
+  }
+
+  @keyframes flowPulse {
+    0% { top: -4px; opacity: 0; }
+    20% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { top: calc(100% + 4px); opacity: 0; }
+  }
+
+  .flow-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.55rem;
+    color: var(--text-dim);
     letter-spacing: 0.05em;
+    white-space: nowrap;
   }
-  .mermaid {
-    max-width: 1000px;
-    width: 100%;
+
+  /* Bidirectional arrow for Calendar API */
+  .flow-arrow--bidir .shaft::before {
+    background: linear-gradient(180deg, var(--amber-dim), transparent 40%, transparent 60%, var(--amber-dim));
   }
-  .mermaid svg {
-    max-width: 100%;
-    height: auto;
+  .flow-arrow--bidir .shaft::after {
+    border-top-color: var(--amber-dim);
   }
+  .flow-arrow--bidir .pulse {
+    background: var(--amber);
+    box-shadow: 0 0 6px var(--amber);
+  }
+
+  /* Policy dotted connection */
+  .flow-arrow--policy .shaft::before {
+    background: repeating-linear-gradient(180deg, var(--teal-dim) 0px, var(--teal-dim) 3px, transparent 3px, transparent 7px);
+  }
+  .flow-arrow--policy .shaft::after {
+    border-top-color: var(--teal-dim);
+    opacity: 0.6;
+  }
+  .flow-arrow--policy .pulse {
+    background: var(--teal);
+    box-shadow: 0 0 6px var(--teal);
+    animation-duration: 3.5s;
+  }
+
+  /* Stagger animation delays */
+  .flow-arrow:nth-child(2) .pulse { animation-delay: 0.6s; }
+  .flow-arrow:nth-child(3) .pulse { animation-delay: 1.2s; }
+  .flow-arrow:nth-child(4) .pulse { animation-delay: 0.3s; }
+  .flow-arrow:nth-child(5) .pulse { animation-delay: 0.9s; }
+
+  /* ── Fade-in on load ── */
+  .arch > * {
+    opacity: 0;
+    transform: translateY(12px);
+    animation: fadeUp 0.6s ease forwards;
+  }
+  .arch > *:nth-child(1) { animation-delay: 0.1s; }
+  .arch > *:nth-child(2) { animation-delay: 0.25s; }
+  .arch > *:nth-child(3) { animation-delay: 0.4s; }
+  .arch > *:nth-child(4) { animation-delay: 0.55s; }
+  .arch > *:nth-child(5) { animation-delay: 0.65s; }
+  .arch > *:nth-child(6) { animation-delay: 0.75s; }
+  .arch > *:nth-child(7) { animation-delay: 0.85s; }
+
+  @keyframes fadeUp {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Rule tag pills */
+  .rule-tags {
+    display: flex;
+    gap: 0.4rem;
+    margin-top: 0.4rem;
+    flex-wrap: wrap;
+  }
+  .rule-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.55rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    background: rgba(45, 212, 191, 0.1);
+    border: 1px solid rgba(45, 212, 191, 0.2);
+    color: var(--teal);
+    letter-spacing: 0.03em;
+  }
+
+  /* Legend */
+  .legend {
+    margin-top: 2.5rem;
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.58rem;
+    color: var(--text-dim);
+  }
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+  }
+  .legend-dot--voice { background: var(--purple); box-shadow: 0 0 6px rgba(192,132,252,0.4); }
+  .legend-dot--rest { background: var(--blue); box-shadow: 0 0 6px rgba(96,165,250,0.4); }
+  .legend-dot--api { background: var(--amber); box-shadow: 0 0 6px rgba(245,158,11,0.4); }
+  .legend-dot--policy { background: var(--teal); box-shadow: 0 0 6px rgba(45,212,191,0.4); }
+
+  /* Icon accent circles */
+  .icon-circle {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    flex-shrink: 0;
+  }
+  .icon-circle--user { background: rgba(255,255,255,0.08); }
+  .icon-circle--voice { background: rgba(192, 132, 252, 0.15); }
+  .icon-circle--text { background: rgba(129, 140, 248, 0.15); }
+  .icon-circle--tools { background: rgba(255,255,255,0.06); }
+  .icon-circle--api { background: rgba(96, 165, 250, 0.15); }
+  .icon-circle--gcal { background: rgba(245, 158, 11, 0.15); }
+  .icon-circle--ui { background: rgba(45, 212, 191, 0.12); }
+  .icon-circle--policy { background: rgba(45, 212, 191, 0.12); }
 </style>
 </head>
 <body>
 
-<h1>Schedule Analyst — System Architecture</h1>
-<p class="subtitle">Google ADK + Gemini Live + Cloud Run</p>
+<div class="page">
 
-<pre class="mermaid">
-%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e293b', 'primaryTextColor': '#e2e8f0', 'primaryBorderColor': '#334155', 'lineColor': '#475569', 'secondaryColor': '#0f172a', 'tertiaryColor': '#1e1b4b', 'fontSize': '14px'}}}%%
-flowchart TB
-    subgraph USER["User"]
-        voice["Voice Input - Microphone"]
-        uiclick["UI Actions - Analyze / Accept"]
-    end
+  <div class="header">
+    <h1>Schedule Analyst — System Architecture</h1>
+    <div class="subtitle">Google ADK &nbsp;·&nbsp; Gemini Live &nbsp;·&nbsp; Cloud Run</div>
+  </div>
 
-    subgraph CLOUDRUN["Google Cloud Run"]
-        subgraph ADK["Google ADK Agent"]
-            gemini_live["Gemini Live API\nbidiGenerateContent\nNative Audio - Kore voice"]
-            gemini_text["Gemini 2.5 Flash\ngenerateContent\nText summaries"]
-            tools["Agent Tools\nget_calendar_events\nfind_conflicts\nsuggest_optimizations\nupdate / delete / create event"]
-        end
+  <div class="arch">
 
-        subgraph SERVER["FastAPI Server"]
-            analyze["/analyze\nGrid report generation"]
-            execute["/execute\nCalendar mutations"]
-            question["/question\nFree-form Q&A"]
-        end
+    <!-- ROW 1: User -->
+    <div class="row-user">
+      <div class="node node--user">
+        <div class="node-title"><span class="icon-circle icon-circle--user">🎙</span> Voice Input</div>
+        <div class="node-detail">Microphone → WebSocket stream</div>
+      </div>
+      <div class="node node--user">
+        <div class="node-title"><span class="icon-circle icon-circle--user">👆</span> UI Actions</div>
+        <div class="node-detail">Analyze · Accept · Question</div>
+      </div>
+    </div>
 
-        brain["Agent Policies\nEditable rules file\nR-01: Protect deep work\nR-02: Family over work\nR-07: Travel buffers"]
-    end
+    <!-- FLOW: User → Cloud Run -->
+    <div class="flow-arrows">
+      <div class="flow-arrow">
+        <div class="flow-label">WebSocket audio</div>
+        <div class="shaft"><div class="pulse"></div></div>
+      </div>
+      <div class="flow-arrow">
+        <div class="flow-label">REST POST</div>
+        <div class="shaft"><div class="pulse"></div></div>
+      </div>
+    </div>
 
-    subgraph GOOGLE["Google APIs"]
-        gcal["Google Calendar API v3\nevents.list / events.update\nevents.insert / events.delete"]
-    end
+    <!-- ROW 2: Cloud Run -->
+    <div class="cloud-run-wrapper">
+      <div class="cloud-run-inner">
 
-    subgraph FRONTEND["Custom UI"]
-        orb["Voice Orb\nADK Web streaming"]
-        grid["Conflict Grid\nProposals + ACCEPT"]
-        sidebar["Agent Policies\nVisible rules"]
-        transcript["Live Transcript"]
-    end
+        <!-- ADK Agent group -->
+        <div class="group group--adk">
+          <div class="group-label">Google ADK Agent</div>
+          <div class="nodes">
+            <div class="node node--gemini-live">
+              <div class="node-title"><span class="icon-circle icon-circle--voice">🔊</span> Gemini Live API</div>
+              <div class="node-detail">bidiGenerateContent<br>Native audio · Kore voice</div>
+            </div>
+            <div class="node node--gemini-text">
+              <div class="node-title"><span class="icon-circle icon-circle--text">💬</span> Gemini 2.5 Flash</div>
+              <div class="node-detail">generateContent<br>Text summaries for grid</div>
+            </div>
+            <div class="node node--tools">
+              <div class="node-title"><span class="icon-circle icon-circle--tools">🔧</span> Agent Tools</div>
+              <div class="node-detail">get_calendar_events<br>find_conflicts · suggest_optimizations<br>update_event · delete_event · create_event</div>
+            </div>
+          </div>
+        </div>
 
-    voice -->|"WebSocket\nAudio stream"| gemini_live
-    gemini_live -->|"Spoken response"| orb
-    gemini_live -->|"Tool calls"| tools
-    tools -->|"API calls"| gcal
-    gcal -->|"Event data"| tools
+        <!-- FastAPI Server group -->
+        <div class="group group--server">
+          <div class="group-label">FastAPI Server</div>
+          <div class="nodes">
+            <div class="node node--endpoint">
+              <div class="node-title">/analyze</div>
+              <div class="node-detail">Grid report generation</div>
+            </div>
+            <div class="node node--endpoint">
+              <div class="node-title">/execute</div>
+              <div class="node-detail">Calendar mutations (HITL)</div>
+            </div>
+            <div class="node node--endpoint">
+              <div class="node-title">/question</div>
+              <div class="node-detail">Free-form Q&amp;A</div>
+            </div>
+          </div>
+        </div>
 
-    uiclick -->|"REST POST"| analyze
-    uiclick -->|"REST POST"| execute
-    analyze -->|"Tool call"| tools
-    analyze -->|"Summarize"| gemini_text
-    execute -->|"Mutation"| tools
+        <!-- Agent Policies -->
+        <div class="policy-node-wrapper">
+          <div class="node node--policy">
+            <div class="node-title"><span class="icon-circle icon-circle--policy">📋</span> Agent Policies</div>
+            <div class="node-detail">Editable rules file · injected as policy context</div>
+            <div class="rule-tags">
+              <span class="rule-tag">R-01  Protect deep work</span>
+              <span class="rule-tag">R-02  Family &gt; work</span>
+              <span class="rule-tag">R-07  Travel buffers</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
-    brain -.->|"Policy context"| gemini_live
-    brain -.->|"Rule display"| sidebar
+    <!-- FLOW: Cloud Run → UI / Calendar -->
+    <div class="flow-arrows">
+      <div class="flow-arrow">
+        <div class="flow-label">Spoken response</div>
+        <div class="shaft"><div class="pulse"></div></div>
+      </div>
+      <div class="flow-arrow">
+        <div class="flow-label">JSON response</div>
+        <div class="shaft"><div class="pulse"></div></div>
+      </div>
+      <div class="flow-arrow">
+        <div class="flow-label">Result</div>
+        <div class="shaft"><div class="pulse"></div></div>
+      </div>
+      <div class="flow-arrow flow-arrow--policy">
+        <div class="flow-label">Policy display</div>
+        <div class="shaft"><div class="pulse"></div></div>
+      </div>
+      <div class="flow-arrow flow-arrow--bidir">
+        <div class="flow-label">API calls ↕ Event data</div>
+        <div class="shaft"><div class="pulse"></div></div>
+      </div>
+    </div>
 
-    analyze -->|"JSON response"| grid
-    gemini_text -->|"Summary text"| grid
-    execute -->|"Result"| grid
+    <!-- ROW 3: UI + Calendar API -->
+    <div class="row-bottom">
+      <div class="ui-wrapper">
+        <div class="ui-nodes">
+          <div class="node node--ui">
+            <div class="node-title"><span class="icon-circle icon-circle--ui">🔮</span> Voice Orb</div>
+            <div class="node-detail">ADK Web streaming</div>
+          </div>
+          <div class="node node--ui">
+            <div class="node-title"><span class="icon-circle icon-circle--ui">📊</span> Conflict Grid</div>
+            <div class="node-detail">Proposals + ACCEPT</div>
+          </div>
+          <div class="node node--ui">
+            <div class="node-title"><span class="icon-circle icon-circle--ui">📋</span> Agent Policies</div>
+            <div class="node-detail">Visible rules sidebar</div>
+          </div>
+          <div class="node node--ui">
+            <div class="node-title"><span class="icon-circle icon-circle--ui">💬</span> Transcript</div>
+            <div class="node-detail">Live conversation log</div>
+          </div>
+        </div>
+      </div>
 
-    style USER fill:#0f172a,stroke:#334155,color:#e2e8f0
-    style CLOUDRUN fill:#0f172a,stroke:#2dd4bf,color:#e2e8f0
-    style ADK fill:#1e1b4b,stroke:#818cf8,color:#e2e8f0
-    style SERVER fill:#172554,stroke:#3b82f6,color:#e2e8f0
-    style GOOGLE fill:#1c1917,stroke:#f59e0b,color:#e2e8f0
-    style FRONTEND fill:#0f2922,stroke:#2dd4bf,color:#e2e8f0
+      <div class="gcal-wrapper">
+        <div class="node node--gcal">
+          <div class="node-title"><span class="icon-circle icon-circle--gcal">📅</span> Google Calendar API v3</div>
+          <div class="node-detail">events.list · events.update<br>events.insert · events.delete</div>
+        </div>
+      </div>
+    </div>
 
-    style gemini_live fill:#3b1f6e,stroke:#c084fc,color:#e9d5ff
-    style gemini_text fill:#312e81,stroke:#818cf8,color:#c7d2fe
-    style tools fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style brain fill:#134e3a,stroke:#2dd4bf,color:#99f6e4
-    style gcal fill:#422006,stroke:#f59e0b,color:#fef3c7
+  </div>
 
-    style orb fill:#1a0f2e,stroke:#c084fc,color:#e9d5ff
-    style grid fill:#0f2922,stroke:#2dd4bf,color:#99f6e4
-    style sidebar fill:#134e3a,stroke:#2dd4bf,color:#99f6e4
-    style transcript fill:#1e293b,stroke:#475569,color:#e2e8f0
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot legend-dot--voice"></div> Voice (Gemini Live)</div>
+    <div class="legend-item"><div class="legend-dot legend-dot--rest"></div> REST endpoints</div>
+    <div class="legend-item"><div class="legend-dot legend-dot--api"></div> Calendar API</div>
+    <div class="legend-item"><div class="legend-dot legend-dot--policy"></div> Agent Policies</div>
+  </div>
 
-    style analyze fill:#172554,stroke:#3b82f6,color:#93c5fd
-    style execute fill:#172554,stroke:#3b82f6,color:#93c5fd
-    style question fill:#172554,stroke:#3b82f6,color:#93c5fd
-</pre>
+</div>
 
-<script>
-  mermaid.initialize({
-    startOnLoad: true,
-    theme: 'dark',
-    flowchart: {
-      useMaxWidth: true,
-      htmlLabels: true,
-      curve: 'basis'
-    }
-  });
-</script>
 </body>
 </html>

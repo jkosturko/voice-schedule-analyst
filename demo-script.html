@@ -265,77 +265,35 @@
 </div>
 
 <!-- ============================================ -->
-<!-- SCENE 1 -->
+<!-- SCENE 1: Opening + brief grid mention -->
 <!-- ============================================ -->
 <div class="scene">
   <div class="scene-header">
     <span class="scene-number">Scene 1</span>
-    <span class="scene-title">Opening — The Problem</span>
+    <span class="scene-title">Opening — The Problem + Grid Preview</span>
     <span class="scene-time">~20s</span>
   </div>
 
   <div class="action">
     <span class="action-icon">👆</span>
-    <span class="action-text">Show the app landing screen — voice orb centered, dark UI visible</span>
+    <span class="action-text">Show the app — grid already loaded with conflicts, voice orb visible</span>
   </div>
 
   <div class="say">
     <span class="say-icon">🎙</span>
     <span class="say-text">
-      If you manage a busy calendar, you know the feeling — back-to-back meetings, double-bookings you didn't notice, and no time to actually <em>think</em>. Schedule Analyst is a <em>voice-first calendar assistant</em> built with Google ADK and Gemini Live. You talk to it about your schedule, and it talks back with conflicts, recommendations, and one-click fixes.
+      If you manage a busy calendar, you know the feeling — back-to-back meetings, double-bookings you didn't notice, and no time to actually <em>think</em>. Schedule Analyst is a <em>voice-first calendar assistant</em> built with Google ADK and Gemini Live. It already pulled my real Google Calendar and analyzed the week — you can see the conflicts right here. But the real magic is the voice. Let me show you.
     </span>
   </div>
 </div>
 
 <!-- ============================================ -->
-<!-- SCENE 2 -->
+<!-- SCENE 2: Voice — the hook -->
 <!-- ============================================ -->
 <div class="scene">
   <div class="scene-header">
     <span class="scene-number">Scene 2</span>
-    <span class="scene-title">Grid Report — Proactive Analysis</span>
-    <span class="scene-time">~30s</span>
-  </div>
-
-  <div class="say">
-    <span class="say-icon">🎙</span>
-    <span class="say-text">
-      The grid already loaded my week proactively — it pulled my real Google Calendar and analyzed everything on page load. No button click needed.
-    </span>
-  </div>
-
-  <div class="action">
-    <span class="action-icon">👆</span>
-    <span class="action-text">Point to the grid report — scroll slowly through the rows</span>
-  </div>
-
-  <div class="say">
-    <span class="say-icon">🎙</span>
-    <span class="say-text">
-      It breaks everything down — <em>conflicts</em> in red, <em>back-to-back meeting blocks</em> as warnings, and <em>dead time gaps</em> that are too short for real work. Each row has a specific proposal: which event to move, where to move it, and which policy rule justifies the decision.
-    </span>
-  </div>
-
-  <div class="action">
-    <span class="action-icon">👆</span>
-    <span class="action-text">Hover over a conflict row to highlight it</span>
-  </div>
-
-  <div class="say">
-    <span class="say-icon">🎙</span>
-    <span class="say-text">
-      For example, here it says <em>"Move Design Sprint to Tuesday at 9 AM — Interview is protected."</em> The rules are transparent — you can see them in the sidebar under Agent Policies.
-    </span>
-  </div>
-</div>
-
-<!-- ============================================ -->
-<!-- SCENE 3 -->
-<!-- ============================================ -->
-<div class="scene">
-  <div class="scene-header">
-    <span class="scene-number">Scene 3</span>
-    <span class="scene-title">Voice Interaction — "What does my week look like?"</span>
+    <span class="scene-title">Voice — "What does my week look like?"</span>
     <span class="scene-time">~30s</span>
   </div>
 
@@ -359,19 +317,111 @@
   <div class="say">
     <span class="say-icon">🎙</span>
     <span class="say-text">
-      Now I'm asking the agent directly — it gives me a spoken briefing of the same data. No clicking, no scrolling. It knows my calendar in real-time.
+      It pulled my real Google Calendar, found the conflicts, and gave me a spoken briefing — no clicking, no scrolling. This is Gemini's <em>native audio</em>, not text-to-speech.
     </span>
   </div>
 </div>
 
 <!-- ============================================ -->
-<!-- SCENE 4 -->
+<!-- SCENE 3: Voice follow-up -->
+<!-- ============================================ -->
+<div class="scene">
+  <div class="scene-header">
+    <span class="scene-number">Scene 3</span>
+    <span class="scene-title">Voice Follow-Up — "Do I have free time Thursday?"</span>
+    <span class="scene-time">~20s</span>
+  </div>
+
+  <div class="voice">
+    <span class="voice-icon">🗣</span>
+    <span class="voice-text">"What about Thursday — do I have any free time for deep work?"</span>
+  </div>
+
+  <p class="wait">⏳ Wait for the agent's spoken response…</p>
+
+  <div class="say">
+    <span class="say-icon">🎙</span>
+    <span class="say-text">
+      The conversation is natural — I can ask follow-up questions, drill into specific days, or ask it to move things around.
+    </span>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- SCENE 4: Voice mutation -->
 <!-- ============================================ -->
 <div class="scene">
   <div class="scene-header">
     <span class="scene-number">Scene 4</span>
-    <span class="scene-title">ACCEPT — One-Click Calendar Mutation</span>
+    <span class="scene-title">Voice Mutation — "Move the vendor call"</span>
+    <span class="scene-time">~30s</span>
+  </div>
+
+  <div class="voice">
+    <span class="voice-icon">🗣</span>
+    <span class="voice-text">"Can you move the vendor call to Friday morning?"</span>
+  </div>
+
+  <p class="wait">⏳ Agent should check Friday's schedule, find an open slot, and confirm before acting…</p>
+
+  <div class="note">
+    <span class="note-icon">💡</span>
+    The agent checks for open slots before placing events — it won't blindly create a conflict. It should propose a specific time and ask for confirmation.
+  </div>
+
+  <div class="voice">
+    <span class="voice-icon">🗣</span>
+    <span class="voice-text">"Yes, do it."</span>
+  </div>
+
+  <p class="wait">⏳ Wait for confirmation that the event was moved…</p>
+
+  <div class="say">
+    <span class="say-icon">🎙</span>
+    <span class="say-text">
+      It checked Friday for open slots, proposed a specific time, confirmed with me, and then made the calendar change — all through voice. No typing, no clicking.
+    </span>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- SCENE 5: Grid walkthrough -->
+<!-- ============================================ -->
+<div class="scene">
+  <div class="scene-header">
+    <span class="scene-number">Scene 5</span>
+    <span class="scene-title">Grid Report — Detailed Walkthrough</span>
     <span class="scene-time">~25s</span>
+  </div>
+
+  <div class="say">
+    <span class="say-icon">🎙</span>
+    <span class="say-text">
+      Now let me show you the detailed report. The grid analyzed my week proactively on page load.
+    </span>
+  </div>
+
+  <div class="action">
+    <span class="action-icon">👆</span>
+    <span class="action-text">Scroll slowly through the grid rows — hover over a conflict row to highlight it</span>
+  </div>
+
+  <div class="say">
+    <span class="say-icon">🎙</span>
+    <span class="say-text">
+      It breaks everything down — <em>conflicts</em> in red, <em>back-to-back meeting blocks</em> as warnings, and <em>dead time gaps</em> that are too short for real work. Each row has a specific proposal: which event to move, where to move it, and which policy rule justifies the decision. For example, here — <em>"Move Design Sprint to Tuesday at 9 AM — Interview is protected."</em>
+    </span>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- SCENE 6: ACCEPT -->
+<!-- ============================================ -->
+<div class="scene">
+  <div class="scene-header">
+    <span class="scene-number">Scene 6</span>
+    <span class="scene-title">ACCEPT — One-Click Calendar Mutation</span>
+    <span class="scene-time">~20s</span>
   </div>
 
   <div class="say">
@@ -397,74 +447,7 @@
 </div>
 
 <!-- ============================================ -->
-<!-- SCENE 5 -->
-<!-- ============================================ -->
-<div class="scene">
-  <div class="scene-header">
-    <span class="scene-number">Scene 5</span>
-    <span class="scene-title">Voice Interaction — Ask a Follow-Up</span>
-    <span class="scene-time">~25s</span>
-  </div>
-
-  <div class="action">
-    <span class="action-icon">👆</span>
-    <span class="action-text">Click the voice orb again</span>
-  </div>
-
-  <div class="voice">
-    <span class="voice-icon">🗣</span>
-    <span class="voice-text">"What about Thursday — do I have any free time for deep work?"</span>
-  </div>
-
-  <p class="wait">⏳ Wait for the agent's spoken response…</p>
-
-  <div class="say">
-    <span class="say-icon">🎙</span>
-    <span class="say-text">
-      The conversation is natural — I can ask follow-up questions, drill into specific days, or ask it to move things around. It uses Gemini's native audio for real-time voice, not text-to-speech.
-    </span>
-  </div>
-</div>
-
-<!-- ============================================ -->
-<!-- SCENE 6 -->
-<!-- ============================================ -->
-<div class="scene">
-  <div class="scene-header">
-    <span class="scene-number">Scene 6</span>
-    <span class="scene-title">Voice Mutation — "Move the vendor call"</span>
-    <span class="scene-time">~30s</span>
-  </div>
-
-  <div class="voice">
-    <span class="voice-icon">🗣</span>
-    <span class="voice-text">"Can you move the vendor call to Friday morning?"</span>
-  </div>
-
-  <p class="wait">⏳ Agent should check Friday's schedule, find an open slot, and confirm before acting…</p>
-
-  <div class="note">
-    <span class="note-icon">💡</span>
-    The agent now checks for open slots before placing events — it won't blindly create a conflict. It should propose a specific time and ask for confirmation.
-  </div>
-
-  <div class="voice">
-    <span class="voice-icon">🗣</span>
-    <span class="voice-text">"Yes, do it."</span>
-  </div>
-
-  <p class="wait">⏳ Wait for confirmation that the event was moved…</p>
-
-  <div class="say">
-    <span class="say-icon">🎙</span>
-    <span class="say-text">
-      It checked Friday for open slots, proposed a specific time, confirmed with me, and then made the calendar change — all through voice. No typing, no clicking.
-    </span>
-  </div>
-</div>
-
-<!-- ============================================ -->
-<!-- SCENE 7 -->
+<!-- SCENE 7: Agent Policies -->
 <!-- ============================================ -->
 <div class="scene">
   <div class="scene-header">
@@ -487,7 +470,7 @@
 </div>
 
 <!-- ============================================ -->
-<!-- SCENE 8 -->
+<!-- SCENE 8: Architecture -->
 <!-- ============================================ -->
 <div class="scene">
   <div class="scene-header">
@@ -504,36 +487,41 @@
   <div class="say">
     <span class="say-icon">🎙</span>
     <span class="say-text">
-      Here's the architecture. The user speaks to the <em>Gemini Live API</em> for real-time voice. The ADK agent orchestrates <em>tool calls</em> to the Google Calendar API for reads and writes. The custom FastAPI server adds the grid analysis endpoints, and the <em>brain rules</em> file feeds the agent's system prompt — so policies are human-readable and editable without redeploying.
+      Here's the architecture. The user speaks to the <em>Gemini Live API</em> for real-time voice. The ADK agent orchestrates <em>tool calls</em> to the Google Calendar API for reads and writes. The custom FastAPI server adds the grid analysis endpoints, and an <em>editable policy file</em> feeds the agent's context — so rules are human-readable and customizable without redeploying.
     </span>
   </div>
 </div>
 
 <!-- ============================================ -->
-<!-- SCENE 9 -->
+<!-- SCENE 9: Cloud Run mention (no console) -->
 <!-- ============================================ -->
 <div class="scene">
   <div class="scene-header">
     <span class="scene-number">Scene 9</span>
-    <span class="scene-title">Cloud Run Proof</span>
-    <span class="scene-time">~10s</span>
+    <span class="scene-title">Cloud Run — Verbal Mention</span>
+    <span class="scene-time">~5s</span>
   </div>
 
   <div class="action">
     <span class="action-icon">👆</span>
-    <span class="action-text">Briefly show the <strong>Cloud Run URL</strong> in the browser address bar (the live deployed version), or flash the GCP Console showing the service running</span>
+    <span class="action-text">Switch to <strong>GCP Console → Cloud Run → Overview</strong> (pre-opened tab with orchestrator row hidden via DevTools inspector)</span>
+  </div>
+
+  <div class="note">
+    <span class="note-icon">💡</span>
+    Before recording: use DevTools inspector to hide the orchestrator row and any URL elements. Only show schedule-analyst service with green checkmark, region, "20 minutes ago", and scaling graph.
   </div>
 
   <div class="say">
     <span class="say-icon">🎙</span>
     <span class="say-text">
-      This is deployed on <em>Google Cloud Run</em> — everything you just saw is running live in production, not localhost.
+      Here's Cloud Run — you can see the service is live, deployed <em>20 minutes ago</em>, with real traffic hitting it right now. Everything you just saw is running in production.
     </span>
   </div>
 </div>
 
 <!-- ============================================ -->
-<!-- SCENE 10 -->
+<!-- SCENE 10: Closing -->
 <!-- ============================================ -->
 <div class="scene">
   <div class="scene-header">
