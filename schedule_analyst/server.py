@@ -23,7 +23,8 @@ logger = logging.getLogger(__name__)
 # Gemini client for summary generation — use AI Studio API key (not Vertex AI)
 # Env var is GOOGLE_API_KEY_HACKATHON on Cloud Run, falls back to GOOGLE_API_KEY
 _GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY_HACKATHON") or os.environ.get("GOOGLE_API_KEY")
-_gemini_client = genai.Client(api_key=_GEMINI_API_KEY) if _GEMINI_API_KEY else genai.Client()
+# Explicitly set vertexai=False to avoid GOOGLE_GENAI_USE_VERTEXAI=TRUE overriding API key mode
+_gemini_client = genai.Client(api_key=_GEMINI_API_KEY, vertexai=False) if _GEMINI_API_KEY else genai.Client()
 
 # Paths
 AGENT_DIR = os.path.dirname(os.path.abspath(__file__))
