@@ -147,6 +147,17 @@ def _format_events_text(events: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _event_end_dt(ev: dict) -> Optional[datetime]:
+    """Parse event end time to a timezone-aware datetime, or None if unparseable."""
+    try:
+        dt = dateparser.isoparse(ev["end"])
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except (ValueError, TypeError, KeyError):
+        return None
+
+
 def get_calendar_events(time_range: str = "this week") -> dict:
     """Fetch calendar events for the specified time range.
 
@@ -176,6 +187,13 @@ def get_calendar_events(time_range: str = "this week") -> dict:
 
         raw_events = events_result.get("items", [])
         events = [_format_event(e) for e in raw_events]
+
+        # Filter out events that have already ended
+        now = datetime.now(timezone.utc)
+        events = [
+            e for e in events
+            if _event_end_dt(e) is None or _event_end_dt(e) > now
+        ]
 
         return {
             "events": events,
