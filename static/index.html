@@ -953,8 +953,9 @@
                 }
 
                 // Use optimization suggestions directly (already have specific proposals)
-                if (optData.suggestions && optData.suggestions.length > 0) {
-                    optData.suggestions.forEach(s => {
+                const suggestions = Array.isArray(optData.suggestions) ? optData.suggestions : [];
+                if (suggestions.length > 0) {
+                    suggestions.forEach(s => {
                         // Skip conflict suggestions — we already handled those above with richer data
                         if (s.reason && s.reason.includes('Conflicts with')) return;
                         recommendations.push({
