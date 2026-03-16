@@ -304,13 +304,25 @@ def find_conflicts(time_range: str = "this week") -> dict:
     }
 
 
-# Protected event keywords — never suggest removing these
-PROTECTED_KEYWORDS = frozenset([
-    "deep work", "focus time", "creative block", "focus", "deep", "creative",
-    "morning routine", "family", "kids", "pickup", "drop-off", "dropoff",
+# Family/kids events — highest protection (R-02)
+FAMILY_KEYWORDS = frozenset([
+    "family", "kids", "pickup", "drop-off", "dropoff", "gymnastics",
+    "school", "daycare", "pediatr", "recital", "soccer", "ballet",
 ])
 
-# Low-priority / moveable keywords — candidates for shifting
+# Deep work / focus — second-highest protection (R-01)
+FOCUS_KEYWORDS = frozenset([
+    "deep work", "focus time", "creative block", "focus", "deep", "creative",
+    "morning routine",
+])
+
+# Travel events — third priority (R-07)
+TRAVEL_KEYWORDS = frozenset([
+    "flight", "airport", "travel", "transit", "drive to", "uber", "lyft",
+    "train", "bus", "commute",
+])
+
+# Low-priority / moveable keywords — candidates for shifting (R-03)
 MOVEABLE_KEYWORDS = frozenset([
     "1:1", "sync", "standup", "stand-up", "check-in", "checkin",
     "optional", "office hours", "social", "lunch",
@@ -348,47 +360,54 @@ def _find_next_free_slot(after_dt: datetime, duration: timedelta, timed: list, s
 def _build_conflict_proposal(ev1: dict, ev2: dict, s1, e1, s2, e2, timed: list) -> dict:
     """Build a rule-based proposal for resolving a conflict.
 
-    Returns dict with: description, action_type, action_params, rule_ref
+    Priority table (who stays, who moves):
+      1. R-02: Family/kids events stay
+      2. R-01: Deep work/focus blocks stay
+      3. R-07: Travel events stay
+      4. Interviews (colorId=11) stay
+      5. R-03: Moveable events (1:1, sync, standup) get moved
+      6. Tiebreaker: shorter event moves
+
+    Returns dict with: proposal, description, action_type, action_params, rule_ref
     """
     name1, name2 = ev1["summary"], ev2["summary"]
-    prot1, prot2 = _is_protected(name1), _is_protected(name2)
-    move1, move2 = _is_moveable(name1), _is_moveable(name2)
 
-    # Decide which event to move
-    move_event = None
-    keep_event = None
-    move_s, move_e = None, None
-    rule_ref = "R-00"
+    # Score each event: higher = more protected (stays)
+    score1 = _protection_score(ev1)
+    score2 = _protection_score(ev2)
 
-    if prot1 and not prot2:
-        move_event, keep_event = ev2, ev1
-        move_s, move_e = s2, e2
-        rule_ref = "R-02"
-    elif prot2 and not prot1:
-        move_event, keep_event = ev1, ev2
-        move_s, move_e = s1, e1
-        rule_ref = "R-02"
-    elif move2 and not move1:
-        move_event, keep_event = ev2, ev1
-        move_s, move_e = s2, e2
-        rule_ref = "R-03"
-    elif move1 and not move2:
-        move_event, keep_event = ev1, ev2
-        move_s, move_e = s1, e1
-        rule_ref = "R-03"
+    # Both equally protected → needs_input
+    if score1 == score2 and score1 >= 3:
+        return {
+            "proposal": {
+                "action": "needs_input",
+                "target_event": name1,
+                "target_event_id": ev1.get("id", ""),
+                "keep_event": name2,
+                "keep_event_id": ev2.get("id", ""),
+                "suggested_time": None,
+                "reason": "Both events are important — choose which to move",
+                "rule_ref": "R-00",
+            },
+            "description": f"Both '{name1}' and '{name2}' are important — which would you prefer to move?",
+            "action_type": "needs_input",
+            "action_params": None,
+            "rule_ref": "R-00",
+        }
+
+    # Determine which to move (lower score moves)
+    if score1 >= score2:
+        keep_ev, move_ev = ev1, ev2
+        keep_s, move_s, move_e = s1, s2, e2
+        rule_ref = _rule_ref_for_score(score1)
+        reason = _reason_for_score(score1, ev1["summary"])
     else:
-        # Neither is clearly moveable — suggest moving the shorter one
-        dur1 = (e1 - s1).total_seconds()
-        dur2 = (e2 - s2).total_seconds()
-        if dur1 <= dur2:
-            move_event, keep_event = ev1, ev2
-            move_s, move_e = s1, e1
-        else:
-            move_event, keep_event = ev2, ev1
-            move_s, move_e = s2, e2
-        rule_ref = "R-07"
+        keep_ev, move_ev = ev2, ev1
+        keep_s, move_s, move_e = s2, s1, e1
+        rule_ref = _rule_ref_for_score(score2)
+        reason = _reason_for_score(score2, ev2["summary"])
 
-    # Find a free slot for the moveable event
+    # Find a free slot for the displaced event
     duration = move_e - move_s
     later_end = max(e1, e2)
     new_start = _find_next_free_slot(later_end, duration, timed)
@@ -397,29 +416,90 @@ def _build_conflict_proposal(ev1: dict, ev2: dict, s1, e1, s2, e2, timed: list) 
         new_start_iso = new_start.isoformat()
         time_str = new_start.strftime("%-I:%M %p")
         return {
-            "description": f"Move '{move_event['summary']}' to {time_str} — {rule_ref}: {'protected event' if rule_ref == 'R-02' else 'lower priority'}",
+            "proposal": {
+                "action": "move",
+                "target_event": move_ev["summary"],
+                "target_event_id": move_ev.get("id", ""),
+                "keep_event": keep_ev["summary"],
+                "keep_event_id": keep_ev.get("id", ""),
+                "suggested_time": new_start_iso,
+                "reason": reason,
+                "rule_ref": rule_ref,
+            },
+            "description": f"Move '{move_ev['summary']}' to {time_str} — '{keep_ev['summary']}' is {reason} ({rule_ref})",
             "action_type": "move_event",
             "action_params": {
-                "event_id": move_event.get("id", ""),
-                "new_start": new_start_iso,
+                "event_id": move_ev.get("id", ""),
+                "start_time": new_start_iso,
             },
             "rule_ref": rule_ref,
         }
     else:
         return {
-            "description": f"Reschedule '{move_event['summary']}' — no same-day slot available",
+            "proposal": {
+                "action": "move",
+                "target_event": move_ev["summary"],
+                "target_event_id": move_ev.get("id", ""),
+                "keep_event": keep_ev["summary"],
+                "keep_event_id": keep_ev.get("id", ""),
+                "suggested_time": None,
+                "reason": reason,
+                "rule_ref": rule_ref,
+            },
+            "description": f"Reschedule '{move_ev['summary']}' — no same-day slot available",
             "action_type": "reschedule",
             "action_params": {
-                "event_id": move_event.get("id", ""),
+                "event_id": move_ev.get("id", ""),
             },
             "rule_ref": rule_ref,
         }
 
 
+def _protection_score(ev: dict) -> int:
+    """Score how protected an event is. Higher = more protected (stays).
+
+    5 = Family/kids (R-02)
+    4 = Deep work/focus (R-01)
+    3 = Travel (R-07)
+    2 = Interview (colorId=11)
+    1 = Not moveable (default)
+    0 = Moveable (1:1, sync, standup)
+    """
+    name = ev.get("summary", "").lower()
+    if any(kw in name for kw in FAMILY_KEYWORDS):
+        return 5
+    if any(kw in name for kw in FOCUS_KEYWORDS):
+        return 4
+    if any(kw in name for kw in TRAVEL_KEYWORDS):
+        return 3
+    if ev.get("colorId") == "11":
+        return 2
+    if any(kw in name for kw in MOVEABLE_KEYWORDS):
+        return 0
+    return 1
+
+
+def _rule_ref_for_score(score: int) -> str:
+    """Map protection score to brain rule reference."""
+    return {5: "R-02", 4: "R-01", 3: "R-07", 2: "R-01"}.get(score, "R-03")
+
+
+def _reason_for_score(score: int, name: str) -> str:
+    """Human-readable reason for why an event is protected."""
+    return {
+        5: "family/kids — protected",
+        4: "deep work — protected",
+        3: "travel — time-sensitive",
+        2: "interview — high-priority",
+    }.get(score, "higher priority")
+
+
 def _is_protected(summary: str) -> bool:
     """Check if an event is protected based on brain rules."""
     lower = summary.lower()
-    return any(kw in lower for kw in PROTECTED_KEYWORDS)
+    return (any(kw in lower for kw in FAMILY_KEYWORDS) or
+            any(kw in lower for kw in FOCUS_KEYWORDS) or
+            any(kw in lower for kw in TRAVEL_KEYWORDS))
 
 
 def _is_moveable(summary: str) -> bool:

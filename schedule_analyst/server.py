@@ -168,10 +168,10 @@ def create_app() -> FastAPI:
         try:
             if action_type == "move_event":
                 event_id = action_params.get("event_id", "")
-                new_start = action_params.get("new_start", "")
-                if not event_id or not new_start:
-                    return JSONResponse({"error": "move_event requires event_id and new_start"}, status_code=400)
-                result = update_event(event_id=event_id, start_time=new_start)
+                start_time = action_params.get("start_time", "")
+                if not event_id or not start_time:
+                    return JSONResponse({"error": "move_event requires event_id and start_time"}, status_code=400)
+                result = update_event(event_id=event_id, start_time=start_time)
 
             elif action_type == "delete_event":
                 event_id = action_params.get("event_id", "")

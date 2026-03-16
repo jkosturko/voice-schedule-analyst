@@ -777,6 +777,8 @@
                         actionHtml = '<span class="text-[10px] text-rose-400 font-mono uppercase">Failed</span>';
                     } else if (rec.status === 'dismissed') {
                         actionHtml = '<span class="text-[10px] text-slate-600 font-mono uppercase">Skipped</span>';
+                    } else if (rec.action_type === 'needs_input') {
+                        actionHtml = `<span class="text-[10px] text-amber-400 font-mono uppercase">Choose</span><button class="w-6 h-6 rounded-md flex items-center justify-center text-slate-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all" onclick="dismissAction(${rec.id})" title="Dismiss"><i data-lucide="x" class="w-3 h-3"></i></button>`;
                     } else {
                         actionHtml = `<button class="btn-action" onclick="executeAction(${rec.id})"><i data-lucide="check" class="w-3 h-3"></i> Accept</button><button class="w-6 h-6 rounded-md flex items-center justify-center text-slate-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all" onclick="dismissAction(${rec.id})" title="Dismiss"><i data-lucide="x" class="w-3 h-3"></i></button>`;
                     }
@@ -800,20 +802,20 @@
         async function executeAction(id, callback) {
             const rec = recommendations.find(r => r.id === id);
             if (!rec || rec.status !== 'pending') { if (callback) callback(); return; }
+            if (rec.action_type === 'needs_input') { if (callback) callback(); return; }
 
             rec.status = 'running';
             renderGridBody();
 
             try {
-                let data;
                 if (rec.action_type && rec.action_params) {
-                    // Structured execution — direct calendar mutation
+                    // Structured execution — direct calendar mutation via /execute
                     const res = await fetch(`${API_BASE}/schedule-analyst/execute`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ action_type: rec.action_type, action_params: rec.action_params })
                     });
-                    data = await res.json();
+                    const data = await res.json();
                     if (data.error) {
                         console.error(`[ACTION] Execute failed for rec ${id}:`, data.error);
                         rec.status = 'failed';
@@ -824,8 +826,19 @@
                         addChatMessage('agent', data.message);
                     } else {
                         rec.status = 'applied';
-                        addTranscriptLine('agent', `Applied: ${rec.title}`);
-                        addChatMessage('agent', `Done — ${rec.description}`);
+                        // Build specific confirmation from proposal
+                        const p = rec.proposal;
+                        let confirmMsg;
+                        if (p && p.action === 'move' && p.suggested_time) {
+                            const t = new Date(p.suggested_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                            confirmMsg = `Moved '${p.target_event}' to ${t}`;
+                        } else if (p && p.action === 'delete') {
+                            confirmMsg = `Deleted '${p.target_event}'`;
+                        } else {
+                            confirmMsg = rec.description;
+                        }
+                        addTranscriptLine('agent', confirmMsg);
+                        addChatMessage('agent', `Done — ${confirmMsg}`);
                     }
                 } else {
                     // Fallback: LLM-based execution for non-structured actions
@@ -835,7 +848,7 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ question: instruction })
                     });
-                    data = await res.json();
+                    const data = await res.json();
                     if (data.error) {
                         console.error(`[ACTION] Failed for rec ${id}:`, data.error);
                         rec.status = 'failed';
@@ -947,6 +960,7 @@
                             status: 'pending',
                             action_type: c.action_type || null,
                             action_params: c.action_params || null,
+                            proposal: c.proposal || null,
                             _action: c.description || `Resolve conflict between "${c.event1}" and "${c.event2}"`,
                         });
                     });
