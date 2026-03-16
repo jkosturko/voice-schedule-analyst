@@ -330,31 +330,49 @@ MOVEABLE_KEYWORDS = frozenset([
 ])
 
 
-def _find_next_free_slot(after_dt: datetime, duration: timedelta, timed: list, same_day: bool = True) -> Optional[datetime]:
-    """Find the next free slot after a given time that fits the duration.
+def _find_next_free_slot(after_dt: datetime, duration: timedelta, timed: list, same_day: bool = False) -> Optional[datetime]:
+    """Find the next free slot that fits the duration, checking up to 5 business days.
 
-    Simple approach: try hourly slots from after_dt until end of day (or next day).
+    Searches hourly slots from 9AM-6PM, skipping weekends.
     """
     # Start searching from the next hour boundary after the conflict
     candidate = after_dt.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-    end_of_search = candidate.replace(hour=18, minute=0)  # Don't schedule past 6 PM
-    if same_day and candidate >= end_of_search:
-        # Try next business day
-        candidate = (candidate + timedelta(days=1)).replace(hour=9, minute=0)
-        end_of_search = candidate.replace(hour=18, minute=0)
 
-    while candidate + duration <= end_of_search:
-        slot_end = candidate + duration
-        # Check if this slot overlaps with any existing event
-        conflict_found = False
-        for s, e, _ in timed:
-            if s < slot_end and e > candidate:
-                conflict_found = True
-                # Jump past this event
-                candidate = e.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-                break
-        if not conflict_found:
-            return candidate
+    # Check up to 5 business days
+    days_checked = 0
+    while days_checked < 5:
+        # Skip weekends (5=Saturday, 6=Sunday)
+        if candidate.weekday() >= 5:
+            candidate = (candidate + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+            continue
+
+        # Clamp to working hours
+        if candidate.hour < 9:
+            candidate = candidate.replace(hour=9, minute=0, second=0, microsecond=0)
+        end_of_day = candidate.replace(hour=18, minute=0, second=0, microsecond=0)
+
+        if candidate >= end_of_day:
+            # Move to next day 9AM
+            candidate = (candidate + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+            days_checked += 1
+            continue
+
+        # Search this day
+        while candidate + duration <= end_of_day:
+            slot_end = candidate + duration
+            conflict_found = False
+            for s, e, _ in timed:
+                if s < slot_end and e > candidate:
+                    conflict_found = True
+                    candidate = e.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+                    break
+            if not conflict_found:
+                return candidate
+
+        # No slot on this day, try next
+        candidate = (candidate + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+        days_checked += 1
+
     return None
 
 
@@ -415,7 +433,11 @@ def _build_conflict_proposal(ev1: dict, ev2: dict, s1, e1, s2, e2, timed: list) 
 
     if new_start:
         new_start_iso = new_start.isoformat()
-        time_str = new_start.strftime("%-I:%M %p")
+        # Include date if moving to a different day
+        if new_start.date() != later_end.date():
+            time_str = new_start.strftime("%a %-I:%M %p")
+        else:
+            time_str = new_start.strftime("%-I:%M %p")
         return {
             "proposal": {
                 "action": "move",
@@ -438,20 +460,18 @@ def _build_conflict_proposal(ev1: dict, ev2: dict, s1, e1, s2, e2, timed: list) 
     else:
         return {
             "proposal": {
-                "action": "move",
+                "action": "needs_input",
                 "target_event": move_ev["summary"],
                 "target_event_id": move_ev.get("id", ""),
                 "keep_event": keep_ev["summary"],
                 "keep_event_id": keep_ev.get("id", ""),
                 "suggested_time": None,
-                "reason": reason,
+                "reason": "No free slot in next 5 business days",
                 "rule_ref": rule_ref,
             },
-            "description": f"Reschedule '{move_ev['summary']}' — no same-day slot available",
-            "action_type": "reschedule",
-            "action_params": {
-                "event_id": move_ev.get("id", ""),
-            },
+            "description": f"No free slot for '{move_ev['summary']}' in the next week — choose manually",
+            "action_type": "needs_input",
+            "action_params": None,
             "rule_ref": rule_ref,
         }
 
