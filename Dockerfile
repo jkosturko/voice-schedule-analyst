@@ -8,7 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
 COPY schedule_analyst/ ./schedule_analyst/
-COPY main.py .
+COPY server.py .
 COPY brain/ ./brain/
 COPY static/ ./static/
 
@@ -20,8 +20,5 @@ USER appuser
 ENV PORT=8080
 EXPOSE 8080
 
-# Run the HTTP server via gunicorn
-# --workers 2: enough for Cloud Run's single vCPU
-# --timeout 120: allow time for Calendar API + Gemini calls
-# --access-logfile -: log requests to stdout for Cloud Logging
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--timeout", "120", "--access-logfile", "-", "main:app"]
+# Run unified ADK + static server
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8080", "--timeout-keep-alive", "120"]

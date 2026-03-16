@@ -388,8 +388,13 @@
         // ══════════════════════════════════════════════════════
         // CONFIG
         // ══════════════════════════════════════════════════════
-        const API_BASE = window.location.origin; // Same origin (Flask serves this)
-        const ADK_BASE = 'http://localhost:8000'; // ADK web server (local dev only)
+        const API_BASE = window.location.origin; // Same origin (serves this)
+        // Auto-detect ADK server location:
+        // localhost → separate ADK dev server on :8000
+        // Cloud Run → ADK is same-origin (server.py serves both)
+        const ADK_BASE = window.location.hostname === 'localhost'
+          ? 'http://localhost:8000'
+          : window.location.origin;
         const ADK_WS_BASE = ADK_BASE.replace('http', 'ws');
         const ADK_APP = 'schedule_analyst';
         const ADK_USER = 'web-user';
