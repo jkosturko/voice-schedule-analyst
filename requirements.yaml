@@ -661,6 +661,38 @@ requirements:
       tested: false
       test_count: 0
 
+  - id: ui-016
+    name: "Undo button on accepted recommendations"
+    status: "Not Started"
+    priority: "Nice to Have"
+    eval_driven: false
+    technology_stack:
+      - "Snackbar/toast with Undo action (3-5 second window)"
+      - "Row state machine: pending → accepted → pending (on undo)"
+      - "For calendar mutations: call delete_event or update_event to reverse"
+    description: |
+      When the user clicks Accept on a recommendation row, show a brief
+      undo window (toast/snackbar, 3-5 seconds) before the action is
+      finalized. Clicking Undo reverts the row to pending state. If the
+      action already mutated the calendar (create/update/delete), the
+      undo must reverse the mutation via the appropriate calendar tool.
+    acceptance_criteria:
+      - "After clicking Accept, a toast appears with 'Undo' button for 3-5 seconds"
+      - "Clicking Undo before timeout reverts row to pending state"
+      - "If calendar was mutated (event created/moved/deleted), undo reverses the mutation"
+      - "If timeout expires without undo, action is finalized and toast disappears"
+      - "Undo button is keyboard-accessible"
+    test_steps:
+      - "Click Accept on a recommendation row"
+      - "Assert: toast appears with Undo button"
+      - "Click Undo within 3 seconds"
+      - "Assert: row reverts to pending state"
+      - "Repeat but let toast expire — assert row stays accepted"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
   # ═══ DEPLOYMENT ═══
 
   - id: deploy-001
