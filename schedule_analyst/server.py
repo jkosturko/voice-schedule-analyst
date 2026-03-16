@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from google import genai
+from google.genai import types
 from google.adk.cli.fast_api import get_fast_api_app
 
 from .calendar_tools import get_calendar_events, find_conflicts
@@ -193,6 +194,10 @@ Respond in natural, spoken language. No JSON. No bullet points unless explicitly
         response = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=full_prompt,
+            config=types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+                temperature=0.7,
+            ),
         )
         return response.text
 
