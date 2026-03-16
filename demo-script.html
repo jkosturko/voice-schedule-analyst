@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schedule Analyst — Demo Script</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #0a0a0f;
+    color: #e2e8f0;
+    line-height: 1.7;
+    padding: 2rem;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #2dd4bf, #818cf8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+  }
+
+  .subtitle {
+    color: #64748b;
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 2rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .scene {
+    margin-bottom: 2.5rem;
+    border-left: 3px solid #1e293b;
+    padding-left: 1.5rem;
+    position: relative;
+  }
+
+  .scene::before {
+    content: '';
+    position: absolute;
+    left: -7px;
+    top: 0;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: #2dd4bf;
+    border: 2px solid #0a0a0f;
+  }
+
+  .scene-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .scene-number {
+    background: #2dd4bf20;
+    color: #2dd4bf;
+    font-size: 0.7rem;
+    font-weight: 800;
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .scene-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #f1f5f9;
+  }
+
+  .scene-time {
+    color: #64748b;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: auto;
+    background: #1e293b;
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+  }
+
+  .action {
+    background: #1e1b4b;
+    border: 1px solid #312e81;
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+    margin: 0.5rem 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    font-size: 0.85rem;
+  }
+
+  .action-icon {
+    color: #818cf8;
+    font-weight: 700;
+    flex-shrink: 0;
+    width: 20px;
+    text-align: center;
+  }
+
+  .action-text {
+    color: #c7d2fe;
+  }
+
+  .say {
+    background: #0f2922;
+    border: 1px solid #134e3a;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin: 0.5rem 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    font-size: 0.95rem;
+  }
+
+  .say-icon {
+    color: #2dd4bf;
+    font-weight: 700;
+    flex-shrink: 0;
+    font-size: 1.1rem;
+  }
+
+  .say-text {
+    color: #99f6e4;
+    font-weight: 400;
+  }
+
+  .say-text em {
+    color: #5eead4;
+    font-style: normal;
+    font-weight: 600;
+  }
+
+  .voice {
+    background: #1a0f2e;
+    border: 1px solid #3b1f6e;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin: 0.5rem 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    font-size: 0.95rem;
+  }
+
+  .voice-icon {
+    color: #c084fc;
+    font-weight: 700;
+    flex-shrink: 0;
+    font-size: 1.1rem;
+  }
+
+  .voice-text {
+    color: #e9d5ff;
+    font-weight: 500;
+    font-style: italic;
+  }
+
+  .note {
+    background: #1c1917;
+    border: 1px solid #44403c;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    margin: 0.5rem 0;
+    font-size: 0.8rem;
+    color: #a8a29e;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+
+  .note-icon { color: #fbbf24; flex-shrink: 0; }
+
+  .wait {
+    color: #64748b;
+    font-size: 0.8rem;
+    padding: 0.3rem 0;
+    margin-left: 1.5rem;
+    font-style: italic;
+  }
+
+  .divider {
+    border: none;
+    border-top: 1px dashed #1e293b;
+    margin: 2rem 0;
+  }
+
+  .tip {
+    background: #172554;
+    border: 1px solid #1e3a8a;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1.5rem 0;
+    font-size: 0.8rem;
+    color: #93c5fd;
+  }
+
+  .tip strong { color: #60a5fa; }
+
+  .total-time {
+    text-align: center;
+    color: #64748b;
+    font-size: 0.85rem;
+    margin-top: 3rem;
+    padding: 1rem;
+    border-top: 1px solid #1e293b;
+  }
+
+  .total-time strong { color: #2dd4bf; font-size: 1.1rem; }
+
+  .legend {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    color: #64748b;
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+  }
+
+  .legend-dot.green { background: #134e3a; border: 1px solid #2dd4bf; }
+  .legend-dot.purple { background: #3b1f6e; border: 1px solid #c084fc; }
+  .legend-dot.blue { background: #312e81; border: 1px solid #818cf8; }
+  .legend-dot.amber { background: #44403c; border: 1px solid #fbbf24; }
+</style>
+</head>
+<body>
+
+<h1>Schedule Analyst — Demo Script</h1>
+<p class="subtitle">Gemini Live Agent Challenge 2026 &nbsp;·&nbsp; ~3 min video</p>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot green"></div> What you say (narration)</div>
+  <div class="legend-item"><div class="legend-dot purple"></div> Voice command to agent</div>
+  <div class="legend-item"><div class="legend-dot blue"></div> Action (click / navigate)</div>
+  <div class="legend-item"><div class="legend-dot amber"></div> Note to self</div>
+</div>
+
+<div class="tip">
+  <strong>Before recording:</strong> Reset demo calendar (ask ARCHON), refresh the app, make sure mic is working. Have the app open at the landing screen with the voice orb visible.
+</div>
+
+<!-- ============================================ -->
+<!-- SCENE 1 -->
+<!-- ============================================ -->
+<div class="scene">
+  <div class="scene-header">
+    <span class="scene-number">Scene 1</span>
+    <span class="scene-title">Opening — The Problem</span>
+    <span class="scene-time">~20s</span>
+  </div>
+
+  <div class="action">
+    <span class="action-icon">👆</span>
+    <span class="action-text">Show the app landing screen — voice orb centered, dark UI visible</span>
+  </div>
+
+  <div class="say">
+    <span class="say-icon">🎙</span>
+    <span class="say-text">
+      If you manage a busy calendar, you know the feeling — back-to-back meetings, double-bookings you didn't notice, and no time to actually <em>think</em>. Schedule Analyst is a <em>voice-first calendar assistant</em> built with Google ADK and Gemini Live. You talk to it about your schedule, and it talks back with conflicts, recommendations, and one-click fixes.
+    </span>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- SCENE 2 -->
+<!-- ============================================ -->
+<div class="scene">
+  <div class="scene-header">
+    <span class="scene-number">Scene 2</span>
+    <span class="scene-title">Grid Report — Proactive Analysis</span>
+    <span class="scene-time">~30s</span>
+  </div>
+
+  <div class="say">
+    <span class="say-icon">🎙</span>
+    <span class="say-text">
+      The grid already loaded my week proactively — it pulled my real Google Calendar and analyzed everything on page load. No button click needed.
+    </span>
+  </div>
+
+  <div class="action">
+    <span class="action-icon">👆</span>
+    <span class="action-text">Point to the grid report — scroll slowly through the rows</span>
+  </div>
+
+  <div class="say">
+    <span class="say-icon">🎙</span>
+    <span class="say-text">
+      It breaks everything down — <em>conflicts</em> in red, <em>back-to-back meeting blocks</em> as warnings, and <em>dead time gaps</em> that are too short for real work. Each row has a specific proposal: which event to move, where to move it, and which policy rule justifies the decision.
+    </span>
+  </div>
+
+  <div class="action">
+    <span class="action-icon">👆</span>
+    <span class="action-text">Hover over a conflict row to highlight it</span>
+  </div>
+
+  <div class="say">
+    <span class="say-icon">🎙</span>
+    <span class="say-text">
+      For example, here it says <em>"Move Design Sprint to Tuesday at 9 AM — Interview is protected."</em> The rules are transparent — you can see them in the sidebar under Agent Policies.
+    </span>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- SCENE 3 -->
+<!-- ============================================ -->
+<div class="scene">
+  <div class="scene-header">
+    <span class="scene-number">Scene 3</span>
+    <span class="scene-title">Voice Interaction — "What does my week look like?"</span>
+    <span class="scene-time">~30s</span>
+  </div>
+
+  <div class="action">
+    <span class="action-icon">👆</span>
+    <span class="action-text">Click the voice orb to activate the microphone</span>
+  </div>
+
+  <div class="voice">
+    <span class="voice-icon">🗣</span>
+    <span class="voice-text">"Hey, what does my week look like?"</span>
+  </div>
+
+  <p class="wait">⏳ Wait for Gemini to respond with a spoken summary of the week…</p>
+
+  <div class="note">
+    <span class="note-icon">💡</span>
+    The agent should mention conflicts (Design Sprint vs Interview), busy days, and maybe flag the Gymnastics Pickup conflict. Let it finish speaking before moving on.
+  </div>
+
+  <div class="say">
+    <span class="say-icon">🎙</span>
+    <span class="say-text">
+      Now I'm asking the agent directly — it gives me a spoken briefing of the same data. No clicking, no scrolling. It knows my calendar in real-time.
+    </span>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- SCENE 4 -->
+<!-- ============================================ -->
+<div class="scene">
+  <div class="scene-header">
+    <span class="scene-number">Scene 4</span>
+    <span class="scene-title">ACCEPT — One-Click Calendar Mutation</span>
+    <span class="scene-time">~25s</span>
+  </div>
+
+  <div class="say">
+    <span class="say-icon">🎙</span>
+    <span class="say-text">
+      The key feature is <em>human-in-the-loop execution</em>. The agent proposes, but the human decides. Watch what happens when I click Accept.
+    </span>
+  </div>
+
+  <div class="action">
+    <span class="action-icon">👆</span>
+    <span class="action-text">Click <strong>ACCEPT</strong> on a conflict row (pick one with a clear "Move X to Y" proposal)</span>
+  </div>
+
+  <p class="wait">⏳ Wait for confirmation message in the chat panel…</p>
+
+  <div class="say">
+    <span class="say-icon">🎙</span>
+    <span class="say-text">
+      It actually moved the event on Google Calendar. This isn't a mock — it called the Calendar API and made the change. The row turns green to confirm it's done.
+    </span>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- SCENE 5 -->
+<!-- ============================================ -->
+<div class="scene">
+  <div class="scene-header">
+    <span class="scene-number">Scene 5</span>
+    <span class="scene-title">Voice Interaction — Ask a Follow-Up</span>
+    <span class="scene-time">~25s</span>
+  </div>
+
+  <div class="action">
+    <span class="action-icon">👆</span>
+    <span class="action-text">Click the voice orb again</span>
+  </div>
+
+  <div class="voice">
+    <span class="voice-icon">🗣</span>
+    <span class="voice-text">"What about Thursday — do I have any free time for deep work?"</span>
+  </div>
+
+  <p class="wait">⏳ Wait for the agent's spoken response…</p>
+
+  <div class="say">
+    <span class="say-icon">🎙</span>
+    <span class="say-text">
+      The conversation is natural — I can ask follow-up questions, drill into specific days, or ask it to move things around. It uses Gemini's native audio for real-time voice, not text-to-speech.
+    </span>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- SCENE 6 -->
+<!-- ============================================ -->
+<div class="scene">
+  <div class="scene-header">
+    <span class="scene-number">Scene 6</span>
+    <span class="scene-title">Voice Mutation — "Move the vendor call"</span>
+    <span class="scene-time">~30s</span>
+  </div>
+
+  <div class="voice">
+    <span class="voice-icon">🗣</span>
+    <span class="voice-text">"Can you move the vendor call to Friday morning?"</span>
+  </div>
+
+  <p class="wait">⏳ Agent should check Friday's schedule, find an open slot, and confirm before acting…</p>
+
+  <div class="note">
+    <span class="note-icon">💡</span>
+    The agent now checks for open slots before placing events — it won't blindly create a conflict. It should propose a specific time and ask for confirmation.
+  </div>
+
+  <div class="voice">
+    <span class="voice-icon">🗣</span>
+    <span class="voice-text">"Yes, do it."</span>
+  </div>
+
+  <p class="wait">⏳ Wait for confirmation that the event was moved…</p>
+
+  <div class="say">
+    <span class="say-icon">🎙</span>
+    <span class="say-text">
+      It checked Friday for open slots, proposed a specific time, confirmed with me, and then made the calendar change — all through voice. No typing, no clicking.
+    </span>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- SCENE 7 -->
+<!-- ============================================ -->
+<div class="scene">
+  <div class="scene-header">
+    <span class="scene-number">Scene 7</span>
+    <span class="scene-title">Agent Policies — Transparent Rules</span>
+    <span class="scene-time">~15s</span>
+  </div>
+
+  <div class="action">
+    <span class="action-icon">👆</span>
+    <span class="action-text">Point to the <strong>Agent Policies</strong> section in the right sidebar</span>
+  </div>
+
+  <div class="say">
+    <span class="say-icon">🎙</span>
+    <span class="say-text">
+      The rules driving these decisions are visible right here — deep work is protected, family events take priority, interviews can't be moved. These are editable. In an enterprise setting, each team could customize their own policies without touching code.
+    </span>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- SCENE 8 -->
+<!-- ============================================ -->
+<div class="scene">
+  <div class="scene-header">
+    <span class="scene-number">Scene 8</span>
+    <span class="scene-title">Architecture Diagram</span>
+    <span class="scene-time">~15s</span>
+  </div>
+
+  <div class="action">
+    <span class="action-icon">👆</span>
+    <span class="action-text">Switch to the <strong>architecture diagram</strong> (open <code>architecture.html</code> in a browser tab, or show the README image)</span>
+  </div>
+
+  <div class="say">
+    <span class="say-icon">🎙</span>
+    <span class="say-text">
+      Here's the architecture. The user speaks to the <em>Gemini Live API</em> for real-time voice. The ADK agent orchestrates <em>tool calls</em> to the Google Calendar API for reads and writes. The custom FastAPI server adds the grid analysis endpoints, and the <em>brain rules</em> file feeds the agent's system prompt — so policies are human-readable and editable without redeploying.
+    </span>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- SCENE 9 -->
+<!-- ============================================ -->
+<div class="scene">
+  <div class="scene-header">
+    <span class="scene-number">Scene 9</span>
+    <span class="scene-title">Cloud Run Proof</span>
+    <span class="scene-time">~10s</span>
+  </div>
+
+  <div class="action">
+    <span class="action-icon">👆</span>
+    <span class="action-text">Briefly show the <strong>Cloud Run URL</strong> in the browser address bar (the live deployed version), or flash the GCP Console showing the service running</span>
+  </div>
+
+  <div class="say">
+    <span class="say-icon">🎙</span>
+    <span class="say-text">
+      This is deployed on <em>Google Cloud Run</em> — everything you just saw is running live in production, not localhost.
+    </span>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- SCENE 10 -->
+<!-- ============================================ -->
+<div class="scene">
+  <div class="scene-header">
+    <span class="scene-number">Scene 10</span>
+    <span class="scene-title">Closing</span>
+    <span class="scene-time">~15s</span>
+  </div>
+
+  <div class="say">
+    <span class="say-icon">🎙</span>
+    <span class="say-text">
+      Schedule Analyst is built with <em>Google ADK</em>, <em>Gemini Live for native voice</em>, and the <em>Google Calendar API</em>, deployed on <em>Cloud Run</em>. It's not just an analyzer — it's an agent that reasons about your time, proposes changes based on transparent policies, and executes with your permission. Thanks for watching.
+    </span>
+  </div>
+</div>
+
+<div class="total-time">
+  Total estimated time: <strong>~3 minutes</strong>
+  <br>
+  <span style="font-size: 0.75rem; color: #475569;">Adjust pacing based on agent response times. If Gemini is slow, narrate over the wait.</span>
+</div>
+
+</body>
+</html>

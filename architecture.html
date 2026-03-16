@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schedule Analyst — Architecture</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  body {
+    background: #0a0a0f;
+    color: #e2e8f0;
+    font-family: 'Inter', system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    margin: 0;
+    padding: 2rem;
+  }
+  h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    background: linear-gradient(135deg, #2dd4bf, #818cf8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subtitle {
+    color: #64748b;
+    font-size: 0.8rem;
+    margin-bottom: 2rem;
+    letter-spacing: 0.05em;
+  }
+  .mermaid {
+    max-width: 1000px;
+    width: 100%;
+  }
+  .mermaid svg {
+    max-width: 100%;
+    height: auto;
+  }
+</style>
+</head>
+<body>
+
+<h1>Schedule Analyst — System Architecture</h1>
+<p class="subtitle">Google ADK + Gemini Live + Cloud Run</p>
+
+<pre class="mermaid">
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e293b', 'primaryTextColor': '#e2e8f0', 'primaryBorderColor': '#334155', 'lineColor': '#475569', 'secondaryColor': '#0f172a', 'tertiaryColor': '#1e1b4b', 'fontSize': '14px'}}}%%
+flowchart TB
+    subgraph USER["User"]
+        voice["Voice Input - Microphone"]
+        uiclick["UI Actions - Analyze / Accept"]
+    end
+
+    subgraph CLOUDRUN["Google Cloud Run"]
+        subgraph ADK["Google ADK Agent"]
+            gemini_live["Gemini Live API\nbidiGenerateContent\nNative Audio - Kore voice"]
+            gemini_text["Gemini 2.5 Flash\ngenerateContent\nText summaries"]
+            tools["Agent Tools\nget_calendar_events\nfind_conflicts\nsuggest_optimizations\nupdate / delete / create event"]
+        end
+
+        subgraph SERVER["FastAPI Server"]
+            analyze["/analyze\nGrid report generation"]
+            execute["/execute\nCalendar mutations"]
+            question["/question\nFree-form Q&A"]
+        end
+
+        brain["Agent Policies\nEditable rules file\nR-01: Protect deep work\nR-02: Family over work\nR-07: Travel buffers"]
+    end
+
+    subgraph GOOGLE["Google APIs"]
+        gcal["Google Calendar API v3\nevents.list / events.update\nevents.insert / events.delete"]
+    end
+
+    subgraph FRONTEND["Custom UI"]
+        orb["Voice Orb\nADK Web streaming"]
+        grid["Conflict Grid\nProposals + ACCEPT"]
+        sidebar["Agent Policies\nVisible rules"]
+        transcript["Live Transcript"]
+    end
+
+    voice -->|"WebSocket\nAudio stream"| gemini_live
+    gemini_live -->|"Spoken response"| orb
+    gemini_live -->|"Tool calls"| tools
+    tools -->|"API calls"| gcal
+    gcal -->|"Event data"| tools
+
+    uiclick -->|"REST POST"| analyze
+    uiclick -->|"REST POST"| execute
+    analyze -->|"Tool call"| tools
+    analyze -->|"Summarize"| gemini_text
+    execute -->|"Mutation"| tools
+
+    brain -.->|"Policy context"| gemini_live
+    brain -.->|"Rule display"| sidebar
+
+    analyze -->|"JSON response"| grid
+    gemini_text -->|"Summary text"| grid
+    execute -->|"Result"| grid
+
+    style USER fill:#0f172a,stroke:#334155,color:#e2e8f0
+    style CLOUDRUN fill:#0f172a,stroke:#2dd4bf,color:#e2e8f0
+    style ADK fill:#1e1b4b,stroke:#818cf8,color:#e2e8f0
+    style SERVER fill:#172554,stroke:#3b82f6,color:#e2e8f0
+    style GOOGLE fill:#1c1917,stroke:#f59e0b,color:#e2e8f0
+    style FRONTEND fill:#0f2922,stroke:#2dd4bf,color:#e2e8f0
+
+    style gemini_live fill:#3b1f6e,stroke:#c084fc,color:#e9d5ff
+    style gemini_text fill:#312e81,stroke:#818cf8,color:#c7d2fe
+    style tools fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style brain fill:#134e3a,stroke:#2dd4bf,color:#99f6e4
+    style gcal fill:#422006,stroke:#f59e0b,color:#fef3c7
+
+    style orb fill:#1a0f2e,stroke:#c084fc,color:#e9d5ff
+    style grid fill:#0f2922,stroke:#2dd4bf,color:#99f6e4
+    style sidebar fill:#134e3a,stroke:#2dd4bf,color:#99f6e4
+    style transcript fill:#1e293b,stroke:#475569,color:#e2e8f0
+
+    style analyze fill:#172554,stroke:#3b82f6,color:#93c5fd
+    style execute fill:#172554,stroke:#3b82f6,color:#93c5fd
+    style question fill:#172554,stroke:#3b82f6,color:#93c5fd
+</pre>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    flowchart: {
+      useMaxWidth: true,
+      htmlLabels: true,
+      curve: 'basis'
+    }
+  });
+</script>
+</body>
+</html>
