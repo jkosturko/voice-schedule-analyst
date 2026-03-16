@@ -439,12 +439,16 @@ def suggest_optimizations(focus: str = "general", time_range: str = "next 7 days
 def update_event(event_id: str, summary: str = "", start_time: str = "", end_time: str = "") -> dict:
     """Update an existing calendar event — move it, rename it, or both.
 
+    When moving an event (new start_time without end_time), the original
+    duration is automatically preserved. No need to specify end_time.
+
     Args:
         event_id: The Google Calendar event ID to update.
         summary: New title for the event. Leave empty to keep current title.
         start_time: New start time in ISO 8601 format (e.g., '2026-03-16T14:00:00-04:00').
                     Leave empty to keep current start time.
-        end_time: New end time in ISO 8601 format. Leave empty to keep current end time.
+        end_time: New end time in ISO 8601 format. Leave empty to auto-preserve
+                  the original duration when start_time is provided.
 
     Returns:
         Dictionary with updated event details or error message.
@@ -459,9 +463,25 @@ def update_event(event_id: str, summary: str = "", start_time: str = "", end_tim
         if summary:
             event["summary"] = summary
 
-        if start_time:
+        if start_time and not end_time:
+            # Auto-preserve duration: calculate original duration, apply to new start
+            orig_start = event["start"].get("dateTime", event["start"].get("date", ""))
+            orig_end = event["end"].get("dateTime", event["end"].get("date", ""))
+            try:
+                orig_s = dateparser.isoparse(orig_start)
+                orig_e = dateparser.isoparse(orig_end)
+                duration = orig_e - orig_s
+                new_s = dateparser.isoparse(start_time)
+                new_e = new_s + duration
+                event["start"] = {"dateTime": start_time}
+                event["end"] = {"dateTime": new_e.isoformat()}
+            except (ValueError, TypeError):
+                # Fallback: just set start, keep original end
+                event["start"] = {"dateTime": start_time}
+        elif start_time:
             event["start"] = {"dateTime": start_time}
-        if end_time:
+            event["end"] = {"dateTime": end_time}
+        elif end_time:
             event["end"] = {"dateTime": end_time}
 
         updated = service.events().update(

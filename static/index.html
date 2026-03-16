@@ -893,23 +893,79 @@
                     return;
                 }
 
+                // Also fetch optimization suggestions (has moveable/protected classification)
+                let optData = {};
+                try {
+                    const optRes = await fetch(`${API_BASE}/schedule-analyst/optimize`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ focus: 'general' })
+                    });
+                    optData = await optRes.json();
+                } catch (e) { console.warn('[GRID] Optimize call failed, using basic conflict data:', e); }
+
+                const moveable = new Set((optData.moveable_events || []).map(e => e.toLowerCase()));
+                const protectedEvts = new Set((optData.protected_events || []).map(e => e.toLowerCase()));
+
                 // Build recommendations from real data
                 recommendations = [];
                 let recId = 0;
 
-                // Conflicts → recommendations
+                // Conflicts → specific proposals (not just problem statements)
                 if (data.conflicts && data.conflicts.length > 0) {
                     data.conflicts.forEach(c => {
                         const dateStr = c.event1_time ? new Date(c.event1_time).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+                        const ev1Move = moveable.has(c.event1.toLowerCase());
+                        const ev2Move = moveable.has(c.event2.toLowerCase());
+                        const ev1Prot = protectedEvts.has(c.event1.toLowerCase());
+                        const ev2Prot = protectedEvts.has(c.event2.toLowerCase());
+
+                        // Generate a specific proposal based on brain rules
+                        let proposal, action;
+                        if (ev1Move && !ev2Move) {
+                            proposal = `Move "${c.event1}" to after "${c.event2}" — it's lower priority.`;
+                            action = `Move "${c.event1}" to the next available slot after "${c.event2}" ends. Preserve its duration. "${c.event1}" is moveable, "${c.event2}" is higher priority.`;
+                        } else if (ev2Move && !ev1Move) {
+                            proposal = `Move "${c.event2}" to after "${c.event1}" — it's lower priority.`;
+                            action = `Move "${c.event2}" to the next available slot after "${c.event1}" ends. Preserve its duration. "${c.event2}" is moveable, "${c.event1}" is higher priority.`;
+                        } else if (ev1Prot && !ev2Prot) {
+                            proposal = `Move "${c.event2}" — "${c.event1}" is protected (brain rule).`;
+                            action = `Move "${c.event2}" to the next available slot. "${c.event1}" is protected and cannot be moved.`;
+                        } else if (ev2Prot && !ev1Prot) {
+                            proposal = `Move "${c.event1}" — "${c.event2}" is protected (brain rule).`;
+                            action = `Move "${c.event1}" to the next available slot. "${c.event2}" is protected and cannot be moved.`;
+                        } else {
+                            proposal = `${c.overlap_minutes || '?'}min overlap — move one to resolve.`;
+                            action = `Resolve conflict: "${c.event1}" overlaps with "${c.event2}" by ${c.overlap_minutes} minutes. Check which is lower priority and move it to the next available slot.`;
+                        }
+
                         recommendations.push({
                             id: recId++,
                             category: 'conflicts',
                             date: dateStr,
                             title: `${c.event1} vs ${c.event2}`,
-                            description: `${c.overlap_minutes || '?'}min overlap (${c.severity || 'warning'}) — resolve by moving or cancelling one.`,
+                            description: proposal,
                             rule_ref: 'R-01',
                             status: 'pending',
-                            _action: `Resolve conflict: "${c.event1}" overlaps with "${c.event2}" by ${c.overlap_minutes} minutes. Move or cancel one of them.`,
+                            _action: action,
+                        });
+                    });
+                }
+
+                // Use optimization suggestions directly (already have specific proposals)
+                if (optData.suggestions && optData.suggestions.length > 0) {
+                    optData.suggestions.forEach(s => {
+                        // Skip conflict suggestions — we already handled those above with richer data
+                        if (s.reason && s.reason.includes('Conflicts with')) return;
+                        recommendations.push({
+                            id: recId++,
+                            category: 'optimizations',
+                            date: '',
+                            title: `${s.action}: ${s.event}`,
+                            description: s.reason,
+                            rule_ref: 'R-07',
+                            status: 'pending',
+                            _action: `${s.action} "${s.event}": ${s.reason}. Execute this calendar change.`,
                         });
                     });
                 }
@@ -923,10 +979,10 @@
                             category: 'optimizations',
                             date: '',
                             title: `${b.count || ''} back-to-back meetings`,
-                            description: b.warning || 'Add buffer breaks between consecutive meetings.',
+                            description: b.warning || 'Add a 15-min buffer break between these meetings.',
                             rule_ref: 'R-12',
                             status: 'pending',
-                            _action: `Add 15-minute buffer breaks between these back-to-back meetings: ${eventNames}`,
+                            _action: `Create a 15-minute "Break" event between these back-to-back meetings: ${eventNames}. Find the gaps and insert buffer blocks.`,
                         });
                     });
                 }
@@ -939,10 +995,10 @@
                             category: 'optimizations',
                             date: '',
                             title: `${d.gap_minutes}min gap: ${d.after_event} → ${d.before_event}`,
-                            description: `Short ${d.gap_minutes}-minute gap. Use for a break or extend adjacent block.`,
+                            description: `Short gap — shift "${d.before_event}" earlier or add a focus block.`,
                             rule_ref: 'R-07',
                             status: 'pending',
-                            _action: `Fill the ${d.gap_minutes}-minute gap between "${d.after_event}" and "${d.before_event}" with a break or focus block.`,
+                            _action: `Fill the ${d.gap_minutes}-minute gap between "${d.after_event}" and "${d.before_event}". Either shift "${d.before_event}" earlier to close the gap, or create a "${d.gap_minutes}-min Focus Block" in that slot.`,
                         });
                     });
                 }
@@ -1152,28 +1208,32 @@
         // ORB CLICK
         // ══════════════════════════════════════════════════════
         function toggleVoice() {
+            console.log('[VOICE] toggleVoice called, voiceState:', voiceState, 'adkAvailable:', adkAvailable);
             if (voiceState === 'speaking') {
-                // Speaking → Barge-in (interrupt + switch to listening)
+                console.log('[VOICE] → bargeIn');
                 bargeIn();
             } else if (voiceState === 'paused') {
-                // Paused → Resume listening
+                console.log('[VOICE] → togglePause (resume)');
                 togglePause();
             } else if (voiceState === 'idle') {
-                // Idle → Start session + listen (requires ADK server)
                 if (!adkAvailable) {
-                    addChatMessage('agent', 'Voice mode requires the local ADK server. Use the text input below instead.');
+                    console.log('[VOICE] → ADK not available, showing text fallback');
+                    addChatMessage('agent', 'Voice mode requires the ADK server. Use the text input below instead.');
                     addTranscriptLine('system', 'Voice unavailable — ADK server not running');
                     return;
                 }
+                console.log('[VOICE] → starting live session');
                 setVoiceState('listening');
                 addTranscriptLine('system', 'Connecting to Gemini Live...');
                 startLiveSession();
             } else if (voiceState === 'listening') {
-                // Listening → Pause (mic stops streaming, session stays open)
+                console.log('[VOICE] → togglePause (pause)');
                 togglePause();
             } else if (voiceState === 'muted') {
-                // Muted → Unmute
+                console.log('[VOICE] → toggleMicMute');
                 toggleMicMute();
+            } else {
+                console.log('[VOICE] → unknown state:', voiceState);
             }
         }
 
