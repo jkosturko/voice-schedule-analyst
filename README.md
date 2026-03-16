@@ -160,7 +160,7 @@ The agent's analysis preferences live in [`brain/schedule-analysis-rules.md`](br
 | **Protected events** | Deep Work, Focus Time, Creative Block, Family — never suggests removing |
 | **Conflict severity** | Triple-booking = critical, double-booking = warning |
 | **Travel buffer** | 1.5 hours before departure events |
-| **Meeting fatigue** | 3+ consecutive meetings triggers warning |
+| **Meeting fatigue** | 5+ consecutive meetings triggers warning |
 | **Dead time** | Gaps under 30 minutes between meetings flagged |
 | **Energy windows** | 10am-12pm protected for deep work (optimization focus) |
 | **Priority order** | Family > protected blocks > scheduled meetings > moveable events |
@@ -252,6 +252,45 @@ voice-schedule-analyst/
 4. **Real data** — Queries your actual Google Calendar via OAuth/service account. Not synthetic data, not hardcoded examples.
 
 5. **Production-ready** — Dockerfile, Cloud Run deploy script, health check endpoint, structured error handling, 55 tests. One command from `git clone` to running on GCP.
+
+## Try It Out (Judges)
+
+Want to test the agent yourself? Here's the quickest path:
+
+### 1. View the demo calendar
+
+The agent analyzes a real Google Calendar. You can view it here (read-only):
+
+[**View Demo Calendar (Week View)**](https://calendar.google.com/calendar/embed?src=556107517e83bcf5c9a7273f25bff29b2a6aff526d8ad1c5680a862f5831bf4a%40group.calendar.google.com&mode=WEEK)
+
+This is the same calendar the agent reads. Notice the conflicts on Monday (Design Sprint vs Interview at 3pm) and the overlapping events throughout the week.
+
+### 2. Talk to the agent
+
+Open the deployed app and click the **voice orb** to start talking. Try these prompts:
+
+| What to say | What happens |
+|-------------|-------------|
+| *"How does Monday the 23rd look?"* | Agent fetches events, speaks a briefing with conflicts |
+| *"Any conflicts I should worry about?"* | Detects overlaps, back-to-back chains, dead time gaps |
+| *"What should I do about the 3pm conflict?"* | Suggests moving the less important event, explains why |
+| *"Can you move the Design Sprint to Tuesday?"* | Executes the move on Google Calendar in real-time |
+
+### 3. Use the conflict grid
+
+The UI loads a visual analysis automatically. Each row shows:
+- **Red rows** = conflicts (overlapping events)
+- **Amber rows** = warnings (back-to-back fatigue, dead time)
+- **ACCEPT button** = one-click to execute the agent's suggestion on Google Calendar
+
+### 4. Check the Agent Policies
+
+Click the **Policies** sidebar tab to see the rules the agent follows. These are loaded from a Markdown file — editing the file changes the agent's behavior with zero code changes.
+
+### Tips
+- **Mute your mic** while reading the UI — the agent is always listening and will respond to narration
+- The agent connects to a **real Google Calendar**, not mock data
+- Accepted changes are reflected immediately in the calendar (refresh the embed link to verify)
 
 ## Competition
 

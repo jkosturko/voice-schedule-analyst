@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=900, height=600">
+<title>Schedule Analyst Thumbnail</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 900px;
+    height: 600px;
+    overflow: hidden;
+    font-family: 'Outfit', sans-serif;
+  }
+
+  .thumbnail {
+    width: 900px;
+    height: 600px;
+    background: #0a0a0f;
+    position: relative;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* Subtle grid background */
+  .thumbnail::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(45, 212, 191, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(45, 212, 191, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    z-index: 0;
+  }
+
+  /* Gradient glow top-right */
+  .glow-1 {
+    position: absolute;
+    width: 500px;
+    height: 500px;
+    top: -150px;
+    right: -100px;
+    background: radial-gradient(circle, rgba(45, 212, 191, 0.12) 0%, transparent 70%);
+    z-index: 0;
+  }
+
+  /* Gradient glow bottom-left */
+  .glow-2 {
+    position: absolute;
+    width: 400px;
+    height: 400px;
+    bottom: -100px;
+    left: -50px;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.10) 0%, transparent 70%);
+    z-index: 0;
+  }
+
+  /* Left side — text content */
+  .left {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 60px 50px 60px 60px;
+    z-index: 1;
+    position: relative;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(45, 212, 191, 0.1);
+    border: 1px solid rgba(45, 212, 191, 0.25);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #2dd4bf;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    width: fit-content;
+    margin-bottom: 24px;
+  }
+
+  .badge svg {
+    width: 14px;
+    height: 14px;
+    fill: #2dd4bf;
+  }
+
+  h1 {
+    font-size: 48px;
+    font-weight: 800;
+    color: #f1f5f9;
+    line-height: 1.1;
+    margin-bottom: 16px;
+    letter-spacing: -1px;
+  }
+
+  h1 span {
+    background: linear-gradient(135deg, #2dd4bf, #818cf8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    font-size: 18px;
+    color: #94a3b8;
+    line-height: 1.5;
+    max-width: 380px;
+    font-weight: 400;
+  }
+
+  .tech-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 28px;
+    flex-wrap: wrap;
+  }
+
+  .tech-tag {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 11px;
+    color: #64748b;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+
+  /* Right side — visual */
+  .right {
+    width: 380px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    position: relative;
+    padding-right: 40px;
+  }
+
+  /* Voice orb */
+  .orb-container {
+    position: relative;
+    width: 220px;
+    height: 220px;
+  }
+
+  .orb-ring-outer {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px solid rgba(45, 212, 191, 0.15);
+    animation: pulse-outer 3s ease-in-out infinite;
+  }
+
+  .orb-ring-mid {
+    position: absolute;
+    inset: 20px;
+    border-radius: 50%;
+    border: 2px solid rgba(45, 212, 191, 0.25);
+    animation: pulse-mid 3s ease-in-out infinite 0.3s;
+  }
+
+  .orb-core {
+    position: absolute;
+    inset: 45px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 40%,
+      rgba(45, 212, 191, 0.4),
+      rgba(99, 102, 241, 0.3) 60%,
+      rgba(45, 212, 191, 0.15) 100%
+    );
+    box-shadow:
+      0 0 40px rgba(45, 212, 191, 0.3),
+      0 0 80px rgba(45, 212, 191, 0.15),
+      inset 0 0 30px rgba(45, 212, 191, 0.2);
+  }
+
+  /* Mic icon in center */
+  .mic-icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 44px;
+    height: 44px;
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  /* Floating calendar cards around orb */
+  .float-card {
+    position: absolute;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(45, 212, 191, 0.15);
+    border-radius: 10px;
+    padding: 10px 14px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  }
+
+  .float-card .card-time {
+    font-size: 10px;
+    color: #2dd4bf;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    margin-bottom: 3px;
+  }
+
+  .float-card .card-title {
+    font-size: 12px;
+    color: #e2e8f0;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .float-card.conflict {
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+
+  .float-card.conflict .card-time {
+    color: #ef4444;
+  }
+
+  .card-1 {
+    top: -10px;
+    right: -20px;
+  }
+
+  .card-2 {
+    bottom: 30px;
+    left: -50px;
+  }
+
+  .card-3 {
+    bottom: -15px;
+    right: 10px;
+  }
+
+  .conflict-badge {
+    display: inline-block;
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+    letter-spacing: 0.3px;
+  }
+
+  @keyframes pulse-outer {
+    0%, 100% { transform: scale(1); opacity: 0.5; }
+    50% { transform: scale(1.08); opacity: 1; }
+  }
+
+  @keyframes pulse-mid {
+    0%, 100% { transform: scale(1); opacity: 0.6; }
+    50% { transform: scale(1.06); opacity: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="thumbnail">
+  <div class="glow-1"></div>
+  <div class="glow-2"></div>
+
+  <div class="left">
+    <div class="badge">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+      Gemini Live Agent
+    </div>
+    <h1>Schedule<br/><span>Analyst</span></h1>
+    <div class="subtitle">
+      Voice-first AI calendar assistant. Speak to your schedule — detect conflicts, optimize your week, execute changes.
+    </div>
+    <div class="tech-row">
+      <span class="tech-tag">Google ADK</span>
+      <span class="tech-tag">Gemini Live</span>
+      <span class="tech-tag">Calendar API</span>
+      <span class="tech-tag">Cloud Run</span>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="orb-container">
+      <div class="orb-ring-outer"></div>
+      <div class="orb-ring-mid"></div>
+      <div class="orb-core"></div>
+      <svg class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="1" width="6" height="12" rx="3"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="23"/>
+        <line x1="8" y1="23" x2="16" y2="23"/>
+      </svg>
+
+      <!-- Floating calendar cards -->
+      <div class="float-card card-1">
+        <div class="card-time">9:00 AM</div>
+        <div class="card-title">Morning Standup</div>
+      </div>
+
+      <div class="float-card conflict card-2">
+        <div class="card-time">3:00 PM <span class="conflict-badge">CONFLICT</span></div>
+        <div class="card-title">Design Sprint</div>
+      </div>
+
+      <div class="float-card card-3">
+        <div class="card-time">10:00 AM</div>
+        <div class="card-title">Deep Work Block</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
