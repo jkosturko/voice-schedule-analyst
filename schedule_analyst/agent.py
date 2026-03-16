@@ -26,7 +26,7 @@ from .calendar_tools import (
 _USE_VERTEX = os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").lower() != "false"
 TEXT_MODEL = os.environ.get("SCHEDULE_ANALYST_MODEL", "gemini-2.5-flash")
 _DEFAULT_LIVE = "gemini-live-2.5-flash-native-audio" if _USE_VERTEX else "gemini-2.5-flash-native-audio-latest"
-LIVE_MODEL = os.environ.get("LIVE_MODEL", _DEFAULT_LIVE)
+LIVE_MODEL = os.environ.get("SCHEDULE_ANALYST_LIVE_MODEL", os.environ.get("LIVE_MODEL", _DEFAULT_LIVE))
 
 
 class DualModelGemini(Gemini):

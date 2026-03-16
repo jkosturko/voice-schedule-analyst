@@ -661,6 +661,52 @@ requirements:
       tested: false
       test_count: 0
 
+  - id: ui-017
+    name: "Evaluate AG-UI protocol for ADK ↔ Custom UI bridge"
+    status: "Not Started"
+    priority: "Should Have"
+    eval_driven: false
+    technology_stack:
+      - "ag_ui_adk — AG-UI protocol wrapper for ADK agents"
+      - "CopilotKit React packages (@copilotkit/react-ui, react-core, runtime)"
+      - "Or: AG-UI protocol directly without CopilotKit (lighter weight)"
+    description: |
+      Evaluate AG-UI / CopilotKit as a replacement for the manual WebSocket
+      plumbing between ADK's FastAPI backend and our custom UI. Current manual
+      implementation has four known gaps:
+
+      1. Connection drops — no auto-reconnect on WebSocket closure (Code 1011).
+         Known stability challenge for Gemini Live agents during tool execution.
+      2. State synchronization — voiceState is client-only, no backend sync.
+         useCoAgent hook would auto-sync agent state to frontend in real-time.
+      3. Authentication — API key passed in WebSocket URL params. AG-UI uses
+         a Proxy Pattern with middleware handling auth securely.
+      4. Data buffering — manual JSON stream + audio packet management.
+         AG-UI standardizes 17 event types for smooth sequential streaming.
+
+      Decision: Does AG-UI's value (reconnection, state sync, buffering)
+      justify the added dependency (React, CopilotKit, ag_ui_adk)? Or can
+      we harden the manual implementation with targeted fixes (auto-reconnect
+      + buffered playback queue)?
+
+      Also evaluate for Athena integration — AG-UI could be the standard
+      bridge between any ADK agent and the Athena command center UI.
+    acceptance_criteria:
+      - "Spike: build a minimal AG-UI + ADK prototype (1 tool, 1 voice interaction)"
+      - "Compare: connection recovery time (manual vs AG-UI) over 10 WebSocket drops"
+      - "Compare: state sync accuracy after tool calls (manual vs useCoAgent)"
+      - "Decision documented: adopt AG-UI, harden manual, or hybrid"
+      - "If adopted: migration plan for existing index.html → React + CopilotKit"
+    open_questions:
+      - "Can AG-UI work with a vanilla HTML frontend, or does it require React?"
+      - "Does AG-UI support Gemini Live's native audio streaming, or only text?"
+      - "What's the bundle size impact of CopilotKit for a single-agent app?"
+      - "Could we use AG-UI protocol directly without CopilotKit?"
+    implementation_status:
+      implemented: false
+      tested: false
+      test_count: 0
+
   - id: ui-016
     name: "Undo button on accepted recommendations"
     status: "Not Started"
