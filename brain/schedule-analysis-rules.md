@@ -15,7 +15,7 @@
 - Rule 1: Creative blocks (Deep Work, Focus Time, Creative Block) are protected — never suggest removing them
 - Rule 2: Flag triple-bookings as critical, double-bookings as warnings
 - Rule 3: Travel events need buffer time — 1.5 hours + commute before departure
-- Rule 4: Back-to-back meetings (>3 consecutive) should trigger a "meeting fatigue" warning
+- Rule 4: Back-to-back meetings (>5 consecutive) should trigger a "meeting fatigue" warning
 - Rule 5: Gaps shorter than 30 minutes between meetings aren't useful — flag as "dead time"
 - Rule 6: Morning routines (before 9am) should be protected unless user explicitly asks
 - Rule 7: Family events take priority over moveable work events

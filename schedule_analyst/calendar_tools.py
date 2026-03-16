@@ -273,7 +273,7 @@ def find_conflicts(time_range: str = "this week") -> dict:
                 conflict.update(proposal)
                 conflicts.append(conflict)
 
-    # Back-to-back chains (3+ meetings with <=5 min gap)
+    # Back-to-back chains (5+ meetings with <=5 min gap)
     back_to_back = []
     current_block = []
     for i, (s, e, ev) in enumerate(timed):
