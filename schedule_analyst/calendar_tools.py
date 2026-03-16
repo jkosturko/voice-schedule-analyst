@@ -255,14 +255,14 @@ def find_conflicts(time_range: str = "this week") -> dict:
         if gap <= 5:
             current_block.append(ev)
         else:
-            if len(current_block) >= 3:
+            if len(current_block) >= 5:
                 back_to_back.append({
                     "count": len(current_block),
                     "events": [e["summary"] for e in current_block],
                     "warning": f"{len(current_block)} back-to-back meetings — meeting fatigue risk",
                 })
             current_block = [ev]
-    if len(current_block) >= 3:
+    if len(current_block) >= 5:
         back_to_back.append({
             "count": len(current_block),
             "events": [e["summary"] for e in current_block],

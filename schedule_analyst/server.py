@@ -20,6 +20,11 @@ from .calendar_tools import get_calendar_events, find_conflicts
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Gemini client for summary generation — use AI Studio API key (not Vertex AI)
+# Env var is GOOGLE_API_KEY_HACKATHON on Cloud Run, falls back to GOOGLE_API_KEY
+_GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY_HACKATHON") or os.environ.get("GOOGLE_API_KEY")
+_gemini_client = genai.Client(api_key=_GEMINI_API_KEY) if _GEMINI_API_KEY else genai.Client()
+
 # Paths
 AGENT_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(AGENT_DIR, "static")
@@ -61,7 +66,7 @@ def create_app() -> FastAPI:
     @app.get("/health/gemini")
     async def health_gemini():
         try:
-            client = genai.Client()
+            client = _gemini_client
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents="Say 'Gemini is connected' in exactly 4 words.",
@@ -156,7 +161,7 @@ def create_app() -> FastAPI:
 def _generate_summary(events_result: dict, conflicts_result: dict | None, prompt: str) -> str:
     """Use Gemini to generate a natural-language summary from structured data."""
     try:
-        client = genai.Client()
+        client = _gemini_client
 
         events = events_result.get("events", [])
         events_text = "\n".join(
