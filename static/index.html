@@ -994,11 +994,11 @@
         // ══════════════════════════════════════════════════════
         // INITIALIZATION
         // ══════════════════════════════════════════════════════
-        document.addEventListener('DOMContentLoaded', async () => {
+        document.addEventListener('DOMContentLoaded', () => {
             if (typeof lucide !== 'undefined') lucide.createIcons();
-            await checkBackendHealth();
             startSessionTimer();
-            // Load live calendar analysis on page load
+            // Fire health checks and analysis in parallel — don't block on health
+            checkBackendHealth();
             loadLiveAnalysis();
         });
 
