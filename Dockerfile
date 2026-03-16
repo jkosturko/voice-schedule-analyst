@@ -21,5 +21,5 @@ ENV PORT=8080
 EXPOSE 8080
 
 # Run our custom server that merges ADK agent API + custom UI + Flask-like endpoints
-# uvicorn runs the FastAPI app from server.py which wraps ADK's agent server
-CMD ["python", "-m", "uvicorn", "schedule_analyst.server:app", "--host", "0.0.0.0", "--port", "8080", "--timeout-keep-alive", "120"]
+# Shell form so $PORT is expanded at runtime (Cloud Run may override PORT)
+CMD python -m uvicorn schedule_analyst.server:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 120

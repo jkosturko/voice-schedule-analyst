@@ -1447,10 +1447,19 @@
             const bar = document.getElementById('voice-bar');
             bar.classList.add('barge-in-flash');
             setTimeout(() => bar.classList.remove('barge-in-flash'), 300);
-            // Stop all scheduled audio immediately
+
+            // Stop client-side audio playback immediately
             if (playbackContext) { playbackContext.close(); playbackContext = null; }
             nextPlayTime = 0;
             isPlaying = false;
+
+            // Ensure mic is unmuted so the user can speak immediately.
+            // Gemini Live's NATIVE barge-in handles the rest: when the user
+            // speaks while the model is generating, Gemini's VAD detects it
+            // and interrupts server-side (sends event.interrupted = true).
+            // We don't need to send fake audio — just unmute + kill playback.
+            micMuted = false;
+
             addTranscriptLine('system', 'Barge-in — interrupted');
             setVoiceState('listening');
         }

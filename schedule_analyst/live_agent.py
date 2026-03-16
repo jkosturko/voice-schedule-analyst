@@ -116,6 +116,31 @@ TOOL_FUNCTIONS = {
 }
 
 
+def _get_live_config() -> types.LiveConnectConfig:
+    """Shared LiveConnectConfig for all modes (voice, text, demo).
+
+    Uses native Gemini Live API capabilities — no custom code needed.
+    https://docs.cloud.google.com/vertex-ai/generative-ai/docs/live-api/configure-gemini-capabilities
+    """
+    return types.LiveConnectConfig(
+        response_modalities=["AUDIO"],
+        tools=[TOOL_DECLARATIONS],
+        system_instruction=types.Content(
+            parts=[types.Part(text=SYSTEM_INSTRUCTION)]
+        ),
+        speech_config=types.SpeechConfig(
+            voice_config=types.VoiceConfig(
+                prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                    voice_name="Kore"  # Warm, professional voice
+                )
+            )
+        ),
+        # Native capabilities — buy, don't build
+        enable_affective_dialog=True,   # Understand + respond to user's emotional tone
+        proactivity=types.ProactivityConfig(proactive_audio=True),  # Agent can initiate conversation
+    )
+
+
 def _check_api_key():
     """Verify GOOGLE_API_KEY is set before attempting connection."""
     key = os.environ.get("GOOGLE_API_KEY", "")
@@ -276,20 +301,7 @@ async def run_voice_agent():
     _check_api_key()
     client = genai.Client()
 
-    config = types.LiveConnectConfig(
-        response_modalities=["AUDIO"],
-        tools=[TOOL_DECLARATIONS],
-        system_instruction=types.Content(
-            parts=[types.Part(text=SYSTEM_INSTRUCTION)]
-        ),
-        speech_config=types.SpeechConfig(
-            voice_config=types.VoiceConfig(
-                prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                    voice_name="Kore"  # Warm, professional voice
-                )
-            )
-        ),
-    )
+    config = _get_live_config()
 
     print("\n🎤 Voice Schedule Analyst — Gemini Live API")
     print("=" * 50)
@@ -335,20 +347,7 @@ async def run_text_agent():
     _check_api_key()
     client = genai.Client()
 
-    config = types.LiveConnectConfig(
-        response_modalities=["AUDIO"],
-        tools=[TOOL_DECLARATIONS],
-        system_instruction=types.Content(
-            parts=[types.Part(text=SYSTEM_INSTRUCTION)]
-        ),
-        speech_config=types.SpeechConfig(
-            voice_config=types.VoiceConfig(
-                prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                    voice_name="Kore"
-                )
-            )
-        ),
-    )
+    config = _get_live_config()
 
     print("\n📅 Voice Schedule Analyst — Text Input Mode (audio responses discarded)")
     print("=" * 50)
@@ -403,20 +402,7 @@ async def run_demo_agent():
     _check_api_key()
     client = genai.Client()
 
-    config = types.LiveConnectConfig(
-        response_modalities=["AUDIO"],
-        tools=[TOOL_DECLARATIONS],
-        system_instruction=types.Content(
-            parts=[types.Part(text=SYSTEM_INSTRUCTION)]
-        ),
-        speech_config=types.SpeechConfig(
-            voice_config=types.VoiceConfig(
-                prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                    voice_name="Kore"
-                )
-            )
-        ),
-    )
+    config = _get_live_config()
 
     DEMO_QUERIES = [
         "Hey, what does my week look like?",

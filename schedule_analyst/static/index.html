@@ -1447,10 +1447,24 @@
             const bar = document.getElementById('voice-bar');
             bar.classList.add('barge-in-flash');
             setTimeout(() => bar.classList.remove('barge-in-flash'), 300);
-            // Stop all scheduled audio immediately
+            // Stop all scheduled audio immediately (client-side)
             if (playbackContext) { playbackContext.close(); playbackContext = null; }
             nextPlayTime = 0;
             isPlaying = false;
+
+            // Signal server-side interrupt — Gemini Live auto-interrupts when
+            // it receives audio input while the model is speaking. Send a short
+            // silence burst via the same blob format the mic uses to trigger this.
+            // Also unmute mic so real voice input flows immediately after.
+            if (liveSocket && liveSocket.readyState === WebSocket.OPEN) {
+                const silencePcm = new Int16Array(1600); // 100ms of 16kHz silence
+                const base64Silence = arrayBufferToBase64(silencePcm.buffer);
+                liveSocket.send(JSON.stringify({
+                    blob: { data: base64Silence, mime_type: `audio/pcm;rate=${SEND_SAMPLE_RATE}` }
+                }));
+            }
+            micMuted = false; // Ensure mic is live for immediate follow-up
+
             addTranscriptLine('system', 'Barge-in — interrupted');
             setVoiceState('listening');
         }

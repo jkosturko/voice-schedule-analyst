@@ -23,8 +23,10 @@ from dateutil import parser as dateparser
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 TOKEN_PATH = os.path.join(os.path.dirname(__file__), "..", "token.json")
 
-# Calendar ID — configurable via env var, defaults to "primary"
-CALENDAR_ID = os.environ.get("GOOGLE_CALENDAR_ID", "primary")
+# Calendar ID — configurable via env var, defaults to hackathon demo calendar
+# NEVER default to "primary" — risks exposing personal calendar on public URLs
+HACKATHON_CALENDAR = "556107517e83bcf5c9a7273f25bff29b2a6aff526d8ad1c5680a862f5831bf4a@group.calendar.google.com"
+CALENDAR_ID = os.environ.get("GOOGLE_CALENDAR_ID", HACKATHON_CALENDAR)
 
 
 def _get_calendar_service():
