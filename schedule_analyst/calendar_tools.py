@@ -221,7 +221,7 @@ def find_conflicts(time_range: str = "this week") -> dict:
 
     timed.sort(key=lambda x: x[0])
 
-    # Detect overlaps
+    # Detect overlaps — with rule-based proposals for each conflict
     conflicts = []
     for i in range(len(timed)):
         for j in range(i + 1, len(timed)):
@@ -234,14 +234,25 @@ def find_conflicts(time_range: str = "this week") -> dict:
             overlap_mins = int((overlap_end - overlap_start).total_seconds() / 60)
             if overlap_mins > 0:
                 overlap_count = sum(1 for (si, ei, _) in timed if si <= s2 < ei)
-                conflicts.append({
+                conflict = {
                     "event1": ev1["summary"],
                     "event2": ev2["summary"],
+                    "event1_id": ev1.get("id", ""),
+                    "event2_id": ev2.get("id", ""),
                     "overlap_minutes": overlap_mins,
                     "event1_time": ev1["start"],
                     "event2_time": ev2["start"],
+                    "event1_end": ev1["end"],
+                    "event2_end": ev2["end"],
                     "severity": "critical" if overlap_count >= 3 else "warning",
-                })
+                }
+
+                # Generate rule-based proposal
+                proposal = _build_conflict_proposal(
+                    ev1, ev2, s1, e1, s2, e2, timed
+                )
+                conflict.update(proposal)
+                conflicts.append(conflict)
 
     # Back-to-back chains (3+ meetings with <=5 min gap)
     back_to_back = []
@@ -304,6 +315,105 @@ MOVEABLE_KEYWORDS = frozenset([
     "1:1", "sync", "standup", "stand-up", "check-in", "checkin",
     "optional", "office hours", "social", "lunch",
 ])
+
+
+def _find_next_free_slot(after_dt: datetime, duration: timedelta, timed: list, same_day: bool = True) -> Optional[datetime]:
+    """Find the next free slot after a given time that fits the duration.
+
+    Simple approach: try hourly slots from after_dt until end of day (or next day).
+    """
+    # Start searching from the next hour boundary after the conflict
+    candidate = after_dt.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    end_of_search = candidate.replace(hour=18, minute=0)  # Don't schedule past 6 PM
+    if same_day and candidate >= end_of_search:
+        # Try next business day
+        candidate = (candidate + timedelta(days=1)).replace(hour=9, minute=0)
+        end_of_search = candidate.replace(hour=18, minute=0)
+
+    while candidate + duration <= end_of_search:
+        slot_end = candidate + duration
+        # Check if this slot overlaps with any existing event
+        conflict_found = False
+        for s, e, _ in timed:
+            if s < slot_end and e > candidate:
+                conflict_found = True
+                # Jump past this event
+                candidate = e.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+                break
+        if not conflict_found:
+            return candidate
+    return None
+
+
+def _build_conflict_proposal(ev1: dict, ev2: dict, s1, e1, s2, e2, timed: list) -> dict:
+    """Build a rule-based proposal for resolving a conflict.
+
+    Returns dict with: description, action_type, action_params, rule_ref
+    """
+    name1, name2 = ev1["summary"], ev2["summary"]
+    prot1, prot2 = _is_protected(name1), _is_protected(name2)
+    move1, move2 = _is_moveable(name1), _is_moveable(name2)
+
+    # Decide which event to move
+    move_event = None
+    keep_event = None
+    move_s, move_e = None, None
+    rule_ref = "R-00"
+
+    if prot1 and not prot2:
+        move_event, keep_event = ev2, ev1
+        move_s, move_e = s2, e2
+        rule_ref = "R-02"
+    elif prot2 and not prot1:
+        move_event, keep_event = ev1, ev2
+        move_s, move_e = s1, e1
+        rule_ref = "R-02"
+    elif move2 and not move1:
+        move_event, keep_event = ev2, ev1
+        move_s, move_e = s2, e2
+        rule_ref = "R-03"
+    elif move1 and not move2:
+        move_event, keep_event = ev1, ev2
+        move_s, move_e = s1, e1
+        rule_ref = "R-03"
+    else:
+        # Neither is clearly moveable — suggest moving the shorter one
+        dur1 = (e1 - s1).total_seconds()
+        dur2 = (e2 - s2).total_seconds()
+        if dur1 <= dur2:
+            move_event, keep_event = ev1, ev2
+            move_s, move_e = s1, e1
+        else:
+            move_event, keep_event = ev2, ev1
+            move_s, move_e = s2, e2
+        rule_ref = "R-07"
+
+    # Find a free slot for the moveable event
+    duration = move_e - move_s
+    later_end = max(e1, e2)
+    new_start = _find_next_free_slot(later_end, duration, timed)
+
+    if new_start:
+        new_start_iso = new_start.isoformat()
+        time_str = new_start.strftime("%-I:%M %p")
+        return {
+            "description": f"Move '{move_event['summary']}' to {time_str} — {rule_ref}: {'protected event' if rule_ref == 'R-02' else 'lower priority'}",
+            "action_type": "move_event",
+            "action_params": {
+                "event_id": move_event.get("id", ""),
+                "new_start": new_start_iso,
+            },
+            "rule_ref": rule_ref,
+        }
+    else:
+        return {
+            "description": f"Reschedule '{move_event['summary']}' — no same-day slot available",
+            "action_type": "reschedule",
+            "action_params": {
+                "event_id": move_event.get("id", ""),
+            },
+            "rule_ref": rule_ref,
+        }
 
 
 def _is_protected(summary: str) -> bool:

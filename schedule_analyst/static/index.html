@@ -805,22 +805,46 @@
             renderGridBody();
 
             try {
-                const instruction = rec._action || `Execute this calendar action: ${rec.title}. Details: ${rec.description}`;
-                const res = await fetch(`${API_BASE}/schedule-analyst/question`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question: instruction })
-                });
-                const data = await res.json();
-
-                if (data.error) {
-                    console.error(`[ACTION] Failed for rec ${id}:`, data.error);
-                    rec.status = 'failed';
-                    addTranscriptLine('system', `Failed: ${rec.title} — ${data.error}`);
+                let data;
+                if (rec.action_type && rec.action_params) {
+                    // Structured execution — direct calendar mutation
+                    const res = await fetch(`${API_BASE}/schedule-analyst/execute`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action_type: rec.action_type, action_params: rec.action_params })
+                    });
+                    data = await res.json();
+                    if (data.error) {
+                        console.error(`[ACTION] Execute failed for rec ${id}:`, data.error);
+                        rec.status = 'failed';
+                        addTranscriptLine('system', `Failed: ${rec.title} — ${data.error}`);
+                    } else if (data.status === 'manual') {
+                        rec.status = 'failed';
+                        addTranscriptLine('system', `${rec.title}: ${data.message}`);
+                        addChatMessage('agent', data.message);
+                    } else {
+                        rec.status = 'applied';
+                        addTranscriptLine('agent', `Applied: ${rec.title}`);
+                        addChatMessage('agent', `Done — ${rec.description}`);
+                    }
                 } else {
-                    rec.status = 'applied';
-                    addTranscriptLine('agent', `Applied: ${rec.title}`);
-                    if (data.answer) addChatMessage('agent', data.answer);
+                    // Fallback: LLM-based execution for non-structured actions
+                    const instruction = rec._action || `Execute this calendar action: ${rec.title}. Details: ${rec.description}`;
+                    const res = await fetch(`${API_BASE}/schedule-analyst/question`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ question: instruction })
+                    });
+                    data = await res.json();
+                    if (data.error) {
+                        console.error(`[ACTION] Failed for rec ${id}:`, data.error);
+                        rec.status = 'failed';
+                        addTranscriptLine('system', `Failed: ${rec.title} — ${data.error}`);
+                    } else {
+                        rec.status = 'applied';
+                        addTranscriptLine('agent', `Applied: ${rec.title}`);
+                        if (data.answer) addChatMessage('agent', data.answer);
+                    }
                 }
             } catch (e) {
                 console.error(`[ACTION] Error for rec ${id}:`, e);
@@ -904,50 +928,26 @@
                     optData = await optRes.json();
                 } catch (e) { console.warn('[GRID] Optimize call failed, using basic conflict data:', e); }
 
-                const moveable = new Set((optData.moveable_events || []).map(e => e.toLowerCase()));
-                const protectedEvts = new Set((optData.protected_events || []).map(e => e.toLowerCase()));
-
                 // Build recommendations from real data
                 recommendations = [];
                 let recId = 0;
 
-                // Conflicts → specific proposals (not just problem statements)
+                // Conflicts → use backend rule-based proposals with structured actions
                 if (data.conflicts && data.conflicts.length > 0) {
                     data.conflicts.forEach(c => {
                         const dateStr = c.event1_time ? new Date(c.event1_time).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : '';
-                        const ev1Move = moveable.has(c.event1.toLowerCase());
-                        const ev2Move = moveable.has(c.event2.toLowerCase());
-                        const ev1Prot = protectedEvts.has(c.event1.toLowerCase());
-                        const ev2Prot = protectedEvts.has(c.event2.toLowerCase());
-
-                        // Generate a specific proposal based on brain rules
-                        let proposal, action;
-                        if (ev1Move && !ev2Move) {
-                            proposal = `Move "${c.event1}" to after "${c.event2}" — it's lower priority.`;
-                            action = `Move "${c.event1}" to the next available slot after "${c.event2}" ends. Preserve its duration. "${c.event1}" is moveable, "${c.event2}" is higher priority.`;
-                        } else if (ev2Move && !ev1Move) {
-                            proposal = `Move "${c.event2}" to after "${c.event1}" — it's lower priority.`;
-                            action = `Move "${c.event2}" to the next available slot after "${c.event1}" ends. Preserve its duration. "${c.event2}" is moveable, "${c.event1}" is higher priority.`;
-                        } else if (ev1Prot && !ev2Prot) {
-                            proposal = `Move "${c.event2}" — "${c.event1}" is protected (brain rule).`;
-                            action = `Move "${c.event2}" to the next available slot. "${c.event1}" is protected and cannot be moved.`;
-                        } else if (ev2Prot && !ev1Prot) {
-                            proposal = `Move "${c.event1}" — "${c.event2}" is protected (brain rule).`;
-                            action = `Move "${c.event1}" to the next available slot. "${c.event2}" is protected and cannot be moved.`;
-                        } else {
-                            proposal = `${c.overlap_minutes || '?'}min overlap — move one to resolve.`;
-                            action = `Resolve conflict: "${c.event1}" overlaps with "${c.event2}" by ${c.overlap_minutes} minutes. Check which is lower priority and move it to the next available slot.`;
-                        }
 
                         recommendations.push({
                             id: recId++,
                             category: 'conflicts',
                             date: dateStr,
                             title: `${c.event1} vs ${c.event2}`,
-                            description: proposal,
-                            rule_ref: 'R-01',
+                            description: c.description || `${c.overlap_minutes || '?'}min overlap`,
+                            rule_ref: c.rule_ref || 'R-01',
                             status: 'pending',
-                            _action: action,
+                            action_type: c.action_type || null,
+                            action_params: c.action_params || null,
+                            _action: c.description || `Resolve conflict between "${c.event1}" and "${c.event2}"`,
                         });
                     });
                 }

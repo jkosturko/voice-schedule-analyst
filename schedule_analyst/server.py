@@ -15,7 +15,7 @@ from google import genai
 from google.genai import types
 from google.adk.cli.fast_api import get_fast_api_app
 
-from .calendar_tools import get_calendar_events, find_conflicts
+from .calendar_tools import get_calendar_events, find_conflicts, update_event, delete_event, create_event
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -154,6 +154,57 @@ def create_app() -> FastAPI:
             "event_count": events_result.get("count", 0),
             "calendar_connected": not bool(calendar_error),
         })
+
+    @app.post("/schedule-analyst/execute")
+    async def execute(request: Request):
+        """Execute a structured calendar action (move, delete, create)."""
+        data = await request.json() if request.headers.get("content-type") == "application/json" else {}
+        action_type = data.get("action_type", "")
+        action_params = data.get("action_params", {})
+
+        if not action_type:
+            return JSONResponse({"error": "action_type is required"}, status_code=400)
+
+        try:
+            if action_type == "move_event":
+                event_id = action_params.get("event_id", "")
+                new_start = action_params.get("new_start", "")
+                if not event_id or not new_start:
+                    return JSONResponse({"error": "move_event requires event_id and new_start"}, status_code=400)
+                result = update_event(event_id=event_id, start_time=new_start)
+
+            elif action_type == "delete_event":
+                event_id = action_params.get("event_id", "")
+                if not event_id:
+                    return JSONResponse({"error": "delete_event requires event_id"}, status_code=400)
+                result = delete_event(event_id=event_id)
+
+            elif action_type == "create_event":
+                summary = action_params.get("summary", "")
+                start_time = action_params.get("start_time", "")
+                end_time = action_params.get("end_time", "")
+                if not summary or not start_time or not end_time:
+                    return JSONResponse({"error": "create_event requires summary, start_time, end_time"}, status_code=400)
+                result = create_event(summary=summary, start_time=start_time, end_time=end_time)
+
+            elif action_type == "reschedule":
+                return JSONResponse({
+                    "status": "manual",
+                    "message": "No same-day slot available. Please reschedule manually.",
+                })
+
+            else:
+                return JSONResponse({"error": f"Unknown action_type: {action_type}"}, status_code=400)
+
+            if result.get("error"):
+                logger.error("[EXECUTE_ERROR] %s", result["error"])
+                return JSONResponse({"error": result["error"]}, status_code=500)
+
+            return JSONResponse({"status": "success", "result": result})
+
+        except Exception as e:
+            logger.error("[EXECUTE_ERROR] %s", e)
+            return JSONResponse({"error": str(e)}, status_code=500)
 
     return app
 
