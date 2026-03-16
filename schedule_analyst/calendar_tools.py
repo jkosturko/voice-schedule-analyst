@@ -132,6 +132,7 @@ def _format_event(event: dict) -> dict:
         "description": (event.get("description", "") or "")[:200],
         "attendees": [a.get("email", "") for a in event.get("attendees", [])[:5]],
         "status": event.get("status", "confirmed"),
+        "colorId": event.get("colorId", ""),
     }
 
 
@@ -461,7 +462,7 @@ def _protection_score(ev: dict) -> int:
     5 = Family/kids (R-02)
     4 = Deep work/focus (R-01)
     3 = Travel (R-07)
-    2 = Interview (colorId=11)
+    2 = Interview (colorId=11 or name contains 'interview')
     1 = Not moveable (default)
     0 = Moveable (1:1, sync, standup)
     """
@@ -472,7 +473,7 @@ def _protection_score(ev: dict) -> int:
         return 4
     if any(kw in name for kw in TRAVEL_KEYWORDS):
         return 3
-    if ev.get("colorId") == "11":
+    if ev.get("colorId") == "11" or "interview" in name:
         return 2
     if any(kw in name for kw in MOVEABLE_KEYWORDS):
         return 0
